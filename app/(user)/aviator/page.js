@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -116,12 +115,15 @@ export default function HighFlyerGame() {
   }, [checkAuth]);
 
   // ==========================================
-  // ২. গেম স্টেট পোলিং
+  // ==========================================
+  // ২. গেম স্টেট পোলিং (রিকোয়েস্ট অ্যানিমেশন ফ্রেম দিয়ে ফিক্সড)
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
 
     let localMultiplier = 1.0;
+    let lastTime = performance.now();
+    let animationFrameId;
 
     const fetchStateFromServer = async () => {
       try {
@@ -174,63 +176,77 @@ export default function HighFlyerGame() {
       }
     };
 
+    // পেজ লোডে প্রথমবার সার্ভার কল
     fetchStateFromServer();
 
-       const uiLoop = setInterval(() => {
-         if (phaseRef.current === "waiting") {
-           setCountdownTimer((prev) => {
-             if (prev <= 1) {
-               fetchStateFromServer();
-               return 0;
-             }
-             return prev - 1;
-           });
-         } else if (phaseRef.current === "flying") {
-           localMultiplier += 0.02;
+    // 🆕 গেম লুপ (requestAnimationFrame ব্যবহার করে)
+    const gameLoop = (currentTime) => {
+      // টাইম ডিফারেন্স বের করা (সেকেন্ডে)
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
 
-           // 🆕 Auto Cashout Logic (এখানে যোগ করা হয়েছে)
-           if (localMultiplier < crashMultiplierRef.current) {
-             [1, 2].forEach((pId) => {
-               const p = panelsRef.current[pId];
-               if (p.hasBet && !p.cashedOut && p.autoCash) {
-                 const autoVal = Number(p.autoVal);
-                 if (localMultiplier >= autoVal) {
-                   cashout(pId, localMultiplier);
-                 }
-               }
-             });
-           }
+      if (phaseRef.current === "waiting") {
+        setCountdownTimer((prev) => {
+          if (prev <= 1) {
+            fetchStateFromServer();
+            return 0;
+          }
+          return prev - 1;
+        });
+      } else if (phaseRef.current === "flying") {
+        // 🆕 প্রতি সেকেন্ডে 0.4 বাড়বে (আগে 50ms এ 0.02 বাড়ত, তাই 1 সেকেন্ডে 0.4)
+        localMultiplier += 0.4 * deltaTime;
 
-           if (localMultiplier >= crashMultiplierRef.current) {
-             localMultiplier = crashMultiplierRef.current;
-             phaseRef.current = "crashed";
-             setCurrentPhase("CRASHED");
-             setCurrentMultiplier(localMultiplier);
-             multiplierRef.current = localMultiplier;
+        // Auto Cashout চেক
+        if (localMultiplier < crashMultiplierRef.current) {
+          [1, 2].forEach((pId) => {
+            const p = panelsRef.current[pId];
+            if (p.hasBet && !p.cashedOut && p.autoCash) {
+              const autoVal = Number(p.autoVal);
+              if (localMultiplier >= autoVal) {
+                cashout(pId, localMultiplier);
+              }
+            }
+          });
+        }
 
-             if (!hasFetchedCrash.current) {
-               hasFetchedCrash.current = true;
-               fetchStateFromServer();
-               setPanels((prev) => ({
-                 1: { ...prev[1], hasBet: false, cashedOut: false },
-                 2: { ...prev[2], hasBet: false, cashedOut: false },
-               }));
-             }
-           } else {
-             setCurrentMultiplier(localMultiplier);
-             multiplierRef.current = localMultiplier;
-           }
-         } else if (phaseRef.current === "crashed") {
-           setCountdownTimer((prev) => {
-             if (prev <= 0) {
-               fetchStateFromServer();
-               return 3;
-             }
-             return prev - 1;
-           });
-         }
-       }, 50);
-    return () => clearInterval(uiLoop);
+        if (localMultiplier >= crashMultiplierRef.current) {
+          localMultiplier = crashMultiplierRef.current;
+          phaseRef.current = "crashed";
+          setCurrentPhase("CRASHED");
+          setCurrentMultiplier(localMultiplier);
+          multiplierRef.current = localMultiplier;
+
+          if (!hasFetchedCrash.current) {
+            hasFetchedCrash.current = true;
+            fetchStateFromServer();
+            setPanels((prev) => ({
+              1: { ...prev[1], hasBet: false, cashedOut: false },
+              2: { ...prev[2], hasBet: false, cashedOut: false },
+            }));
+          }
+        } else {
+          setCurrentMultiplier(localMultiplier);
+          multiplierRef.current = localMultiplier;
+        }
+      } else if (phaseRef.current === "crashed") {
+        setCountdownTimer((prev) => {
+          if (prev <= 0) {
+            fetchStateFromServer();
+            return 3;
+          }
+          return prev - 1;
+        });
+      }
+
+      animationFrameId = requestAnimationFrame(gameLoop);
+    };
+
+    // লুপ শুরু
+    animationFrameId = requestAnimationFrame(gameLoop);
+
+    // ক্লিনআপ
+    return () => cancelAnimationFrame(animationFrameId);
   }, [isAuthenticated]);
 
   // ==========================================
