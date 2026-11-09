@@ -51,7 +51,8 @@ export default function HighFlyerGame() {
   const animationFrameId = useRef(null);
   const panelsRef = useRef(panels);
   const hasFetchedCrash = useRef(false);
-
+  const serverStartTimeRef = useRef(0);
+  const serverNextRoundTimeRef = useRef(0);
   useEffect(() => {
     panelsRef.current = panels;
   }, [panels]);
