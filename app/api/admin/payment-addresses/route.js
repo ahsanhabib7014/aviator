@@ -1,0 +1,222 @@
+
+import { NextResponse } from "next/server";
+import dbConnect from "@/utils/db";
+import User from "@/models/User";
+import AuditLog from "@/models/AuditLog"; // 🆕 অডিট লগ ইমপোর্ট
+import { verifyAuth } from "@/utils/authCheck";
+
+// ==========================================
+// ✅ GET — অ্যাডমিনের সেভ করা অ্যাড্রেসগুলো লোড করা
+// ==========================================
+export async function GET() {
+  try {
+    await dbConnect();
+
+    const auth = await verifyAuth("user");
+    if (!auth.success) {
+      return NextResponse.json(
+        { success: false, message: auth.message },
+        { status: auth.status || 401 },
+      );
+    }
+
+    const admin = await User.findOne({ role: "admin" })
+      .select("agentPaymentAccounts")
+      .lean();
+
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, message: "অ্যাডমিন পাওয়া যায়নি।" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      addresses: admin.agentPaymentAccounts || [],
+    });
+  } catch (error) {
+    console.error("GET Payment Addresses Error:", error);
+    return NextResponse.json(
+      { success: false, message: "সার্ভার এরর: " + error.message },
+      { status: 500 },
+    );
+  }
+}
+
+// ==========================================
+// ✅ POST — নতুন অ্যাড্রেস সেভ করা (শুধু অ্যাডমিন)
+// ==========================================
+export async function POST(req) {
+  try {
+    await dbConnect();
+
+    const auth = await verifyAuth("admin");
+    if (!auth.success) {
+      return NextResponse.json(
+        { success: false, message: auth.message },
+        { status: auth.status || 401 },
+      );
+    }
+
+    const body = await req.json();
+    const { method, accountNumber } = body || {};
+
+    if (!method || !accountNumber || !accountNumber.trim()) {
+      return NextResponse.json(
+        { success: false, message: "মেথড এবং অ্যাড্রেস দুটোই দিতে হবে!" },
+        { status: 400 },
+      );
+    }
+
+    const cleanMethod = String(method).trim();
+    const cleanAccountNumber = String(accountNumber).trim();
+
+    const admin = await User.findOne({ role: "admin" });
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, message: "অ্যাডমিন পাওয়া যায়নি।" },
+        { status: 404 },
+      );
+    }
+
+    const existing = (admin.agentPaymentAccounts || []).find(
+      (acc) =>
+        acc.method === cleanMethod && acc.accountNumber === cleanAccountNumber,
+    );
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "এই অ্যাড্রেসটি ইতিমধ্যে সেভ করা আছে!",
+        },
+        { status: 400 },
+      );
+    }
+
+    // 🆕 অডিট লগের জন্য আগের ডেটা
+    const oldData = {
+      agentPaymentAccounts: admin.agentPaymentAccounts || [],
+    };
+
+    admin.agentPaymentAccounts = [
+      ...(admin.agentPaymentAccounts || []),
+      {
+        method: cleanMethod,
+        accountNumber: cleanAccountNumber,
+      },
+    ];
+
+    await admin.save();
+
+    // 🆕 অডিট লগ তৈরি
+    try {
+      await AuditLog.create({
+        adminId: auth.user._id,
+        adminPhone: auth.user.phone || auth.user.uid,
+        action: "PAYMENT_ADDRESS_CREATE",
+        targetUser: "N/A",
+        oldData,
+        newData: {
+          agentPaymentAccounts: admin.agentPaymentAccounts,
+        },
+        details: `অ্যাডমিন (${auth.user.phone || auth.user.uid}) কর্তৃক নতুন পেমেন্ট অ্যাড্রেস যোগ করা হয়েছে — ${cleanMethod}: ${cleanAccountNumber}`,
+        ipAddress: req.headers.get("x-forwarded-for") || "127.0.0.1",
+      });
+    } catch (auditErr) {
+      console.error("Audit log error:", auditErr);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `✅ ${cleanMethod} অ্যাড্রেস সফলভাবে সেভ হয়েছে!`,
+      addresses: admin.agentPaymentAccounts,
+    });
+  } catch (error) {
+    console.error("POST Payment Addresses Error:", error);
+    return NextResponse.json(
+      { success: false, message: "সার্ভার এরর: " + error.message },
+      { status: 500 },
+    );
+  }
+}
+
+// ==========================================
+// ✅ DELETE — অ্যাড্রেস ডিলিট করা (শুধু অ্যাডমিন)
+// ==========================================
+export async function DELETE(req) {
+  try {
+    await dbConnect();
+
+    const auth = await verifyAuth("admin");
+    if (!auth.success) {
+      return NextResponse.json(
+        { success: false, message: auth.message },
+        { status: auth.status || 401 },
+      );
+    }
+
+    const body = await req.json();
+    const { accountNumber } = body || {};
+
+    if (!accountNumber) {
+      return NextResponse.json(
+        { success: false, message: "অ্যাড্রেস আইডি দিতে হবে!" },
+        { status: 400 },
+      );
+    }
+
+    const admin = await User.findOne({ role: "admin" });
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, message: "অ্যাডমিন পাওয়া যায়নি।" },
+        { status: 404 },
+      );
+    }
+
+    // 🆕 অডিট লগের জন্য আগের ডেটা
+    const oldData = {
+      agentPaymentAccounts: admin.agentPaymentAccounts || [],
+    };
+
+    const deletedAccount = (admin.agentPaymentAccounts || []).find(
+      (acc) => acc.accountNumber === String(accountNumber).trim(),
+    );
+
+    admin.agentPaymentAccounts = (admin.agentPaymentAccounts || []).filter(
+      (acc) => acc.accountNumber !== String(accountNumber).trim(),
+    );
+
+    await admin.save();
+
+    // 🆕 অডিট লগ তৈরি
+    try {
+      await AuditLog.create({
+        adminId: auth.user._id,
+        adminPhone: auth.user.phone || auth.user.uid,
+        action: "PAYMENT_ADDRESS_DELETE",
+        targetUser: "N/A",
+        oldData,
+        newData: {
+          agentPaymentAccounts: admin.agentPaymentAccounts,
+        },
+        details: `অ্যাডমিন (${auth.user.phone || auth.user.uid}) কর্তৃক পেমেন্ট অ্যাড্রেস ডিলিট করা হয়েছে — ${deletedAccount?.method || ""}: ${accountNumber}`,
+        ipAddress: req.headers.get("x-forwarded-for") || "127.0.0.1",
+      });
+    } catch (auditErr) {
+      console.error("Audit log error:", auditErr);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "✅ অ্যাড্রেস ডিলিট হয়েছে!",
+    });
+  } catch (error) {
+    console.error("DELETE Payment Addresses Error:", error);
+    return NextResponse.json(
+      { success: false, message: "সার্ভার এরর: " + error.message },
+      { status: 500 },
+    );
+  }
+}
