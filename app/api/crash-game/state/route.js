@@ -172,7 +172,6 @@ export async function GET(req) {
       state.multiplier = 1.0;
       state.nextRoundTime = now + 10000;
       state.totalBetAmount = 0;
-      state.startTime = 0;
       state.roundId = generateNextRoundId();
 
       try {
