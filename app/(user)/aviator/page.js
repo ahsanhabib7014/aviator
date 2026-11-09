@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -51,8 +50,11 @@ export default function HighFlyerGame() {
   const animationFrameId = useRef(null);
   const panelsRef = useRef(panels);
   const hasFetchedCrash = useRef(false);
+
+  // 🆕 সার্ভার টাইম ট্র্যাকিং
   const serverStartTimeRef = useRef(0);
   const serverNextRoundTimeRef = useRef(0);
+
   useEffect(() => {
     panelsRef.current = panels;
   }, [panels]);
@@ -147,6 +149,10 @@ export default function HighFlyerGame() {
           multiplierRef.current = data.multiplier || 1.0;
           crashMultiplierRef.current = data.crashAt || 2.0;
           localMultiplier = data.multiplier || 1.0;
+
+          // 🆕 সার্ভারের টাইম রেফ-এ সেভ করা
+          serverStartTimeRef.current = data.startTime || 0;
+          serverNextRoundTimeRef.current = data.nextRoundTime || 0;
 
           setCurrentMultiplier(localMultiplier);
 

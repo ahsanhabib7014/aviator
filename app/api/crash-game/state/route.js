@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import dbConnect from "@/utils/db";
 import { CrashGameSetting } from "@/models/CrashGameSetting";
-import { CrashRound } from "@/models/CrashRound"; // 🆕 CrashRound ইমপোর্ট
+import { CrashRound } from "@/models/CrashRound";
 import User from "@/models/User";
 
 const generateNextRoundId = () => {
@@ -47,14 +47,18 @@ export async function GET(req) {
     const state = global.crashGameState;
     const now = Date.now();
 
+    // ==========================================
+    // ১. Waiting থেকে Flying-এ যাওয়া
+    // ==========================================
     if (state.status === "waiting" && now > state.nextRoundTime) {
       const settings = (await CrashGameSetting.findOne({}).lean()) || {
         targetProfitPercent: 0,
         forceMultiplier: null,
       };
+
       state.status = "flying";
       state.multiplier = 1.0;
-      state.startTime = now;
+      state.startTime = now; // 🆕 শুরুর সময় সেট করা
       state.lastResult = null;
 
       let finalCrashPoint = 1.0;
@@ -106,21 +110,20 @@ export async function GET(req) {
       }
       state.crashAt = finalCrashPoint;
 
+      // 🆕 ডাটাবেসে রাউন্ড স্ট্যাটাস active করা
       try {
-        await CrashRound.findOneAndUpdate(
+        await CrashRound.updateOne(
           { periodNumber: state.roundId },
-          {
-            $setOnInsert: {
-              status: "active",
-              totalBets: 0,
-              bets: [],
-              createdAt: new Date(),
-            },
-          },
-          { upsert: true, new: true },
+          { $set: { status: "active" } },
         );
-      } catch (dbErr) {}
-    } else if (state.status === "flying") {
+      } catch (dbErr) {
+        console.error("Round status update error:", dbErr);
+      }
+    }
+    // ==========================================
+    // ২. Flying অবস্থায় মাল্টিপ্লায়ার বাড়ানো
+    // ==========================================
+    else if (state.status === "flying") {
       const timePassed = (now - state.startTime) / 1000;
       state.multiplier = parseFloat(
         (1.0 + Math.pow(timePassed * 0.55, 1.45)).toFixed(2),
@@ -128,7 +131,7 @@ export async function GET(req) {
 
       if (state.multiplier >= state.crashAt) {
         state.status = "crashed";
-        state.nextRoundTime = now + 3200;
+        state.nextRoundTime = now + 3200; // ৩.২ সেকেন্ড পর নতুন রাউন্ড
 
         try {
           const currentRound = await CrashRound.findOne({
@@ -167,11 +170,16 @@ export async function GET(req) {
           }
         } catch (err) {}
       }
-    } else if (state.status === "crashed" && now > state.nextRoundTime) {
+    }
+    // ==========================================
+    // ৩. Crashed থেকে Waiting-এ ফেরা
+    // ==========================================
+    else if (state.status === "crashed" && now > state.nextRoundTime) {
       state.status = "waiting";
       state.multiplier = 1.0;
-      state.nextRoundTime = now + 10000;
+      state.nextRoundTime = now + 10000; // ১০ সেকেন্ড কাউন্টডাউন
       state.totalBetAmount = 0;
+      state.startTime = 0; // 🆕 startTime রিসেট করা
       state.roundId = generateNextRoundId();
 
       try {
@@ -190,6 +198,9 @@ export async function GET(req) {
       } catch (dbErr) {}
     }
 
+    // ==========================================
+    // ডাটা রিটার্ন করা
+    // ==========================================
     let liveBetsData = [];
     let totalBetsCount = 0;
     let totalBetsAmount = 0;
