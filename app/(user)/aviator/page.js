@@ -51,6 +51,10 @@ export default function HighFlyerGame() {
   const panelsRef = useRef(panels);
   const hasFetchedCrash = useRef(false);
 
+  // 🆕 গেমের আসল সময় ট্র্যাক করার জন্য
+  const gameStartTimeRef = useRef(0);
+  const nextRoundTimeRef = useRef(0);
+
   useEffect(() => {
     panelsRef.current = panels;
   }, [panels]);
@@ -115,13 +119,11 @@ export default function HighFlyerGame() {
   }, [checkAuth]);
 
   // ==========================================
-  // ==========================================
-  // ২. গেম স্টেট পোলিং (Date.now() দিয়ে সম্পূর্ণ ল্যাগমুক্ত)
+  // ২. গেম স্টেট পোলিং (সম্পূর্ণ ল্যাগমুক্ত)
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    let localMultiplier = 1.0;
     let animationFrameId;
 
     const fetchStateFromServer = async () => {
@@ -140,19 +142,20 @@ export default function HighFlyerGame() {
           phaseRef.current = data.status.toLowerCase();
           multiplierRef.current = data.multiplier || 1.0;
           crashMultiplierRef.current = data.crashAt || 2.0;
-          localMultiplier = data.multiplier || 1.0;
 
-          setCurrentMultiplier(localMultiplier);
+          // 🆕 সার্ভার থেকে আসা টাইম সেভ করা
+          nextRoundTimeRef.current = data.nextRoundTime || 0;
+          // সার্ভারের মাল্টিপ্লায়ার থেকে গেমের শুরুর সময় বের করা
+          // সার্ভার ফর্মুলা: multiplier = 1 + (timePassed * 0.55)^1.45
+          if (data.status === "flying" && data.multiplier > 1) {
+            const timePassed = Math.pow(data.multiplier - 1, 1 / 1.45) / 0.55;
+            gameStartTimeRef.current = Date.now() - timePassed * 1000;
+          }
+
+          setCurrentMultiplier(multiplierRef.current);
 
           if (typeof data.balance === "number") {
             setUserBalance(Number(data.balance).toFixed(2));
-          }
-
-          if (data.status === "waiting") {
-            const timeLeft = Math.ceil(
-              (data.nextRoundTime - Date.now()) / 1000,
-            );
-            setCountdownTimer(timeLeft > 0 ? timeLeft : 10);
           }
 
           if (data.bets) {
@@ -177,46 +180,53 @@ export default function HighFlyerGame() {
 
     fetchStateFromServer();
 
-    // 🆕 গেম ইঞ্জিন (rAF + Date.now ব্যবহার করে)
+    let lastSec = -1;
+    let lastCrashFetch = 0;
+
+    // 🆕 মূল গেম লুপ (ঘড়ির সময়ের ওপর নির্ভরশীল, তাই কখনো আটকাবে না)
     const gameLoop = () => {
       const now = Date.now();
 
       if (phaseRef.current === "waiting") {
-        setCountdownTimer((prev) => {
-          if (prev <= 1) {
-            fetchStateFromServer();
-            return 0;
-          }
-          return prev - 1;
-        });
-      } else if (phaseRef.current === "flying") {
-        // 🆕 মাল্টিপ্লায়ার সরাসরি সার্ভারের সূত্রের ওপর ভিত্তি করে বড় হবে
-        // সার্ভারে 0.55 দিয়ে গুণ করে 1.45 পাওয়ার করে বাড়ে, তাই আমরা ঠিক সেই হিসাবই করব
-        // এতে করে ল্যাগ হলেও মাল্টিপ্লায়ার সঠিক থাকবে
+        // সার্ভারের nextRoundTime থেকে ঠিক কত সেকেন্ড বাকি তা বের করা
+        const diff = nextRoundTimeRef.current - now;
+        const secs = Math.ceil(diff / 1000);
 
-        // তবে সহজ রাখতে আমরা গতিবেগ ধরে নিচ্ছি: প্রতি সেকেন্ডে 0.4 বাড়বে
-        // যেহেতু সার্ভার স্টেটে startTime নেই, তাই লোকালি বাড়াবো
-        localMultiplier += 0.4 * (1 / 60); // ৬০ FPS ধরে হিসাব
+        if (secs !== lastSec && secs >= 0) {
+          lastSec = secs;
+          setCountdownTimer(secs);
+        }
+
+        if (diff <= 0 && now - lastCrashFetch > 2000) {
+          lastCrashFetch = now;
+          fetchStateFromServer();
+        }
+      } else if (phaseRef.current === "flying") {
+        // 🆕 সার্ভারের শুরুর সময় থেকে হিসাব করা (ল্যাগ হলেও মাল্টিপ্লায়ার সঠিক থাকবে)
+        const timePassed = (now - gameStartTimeRef.current) / 1000;
+        let calcMultiplier = 1.0 + Math.pow(timePassed * 0.55, 1.45);
+
+        if (calcMultiplier < 1) calcMultiplier = 1;
 
         // Auto Cashout চেক
-        if (localMultiplier < crashMultiplierRef.current) {
+        if (calcMultiplier < crashMultiplierRef.current) {
           [1, 2].forEach((pId) => {
             const p = panelsRef.current[pId];
             if (p.hasBet && !p.cashedOut && p.autoCash) {
               const autoVal = Number(p.autoVal);
-              if (localMultiplier >= autoVal) {
-                cashout(pId, localMultiplier);
+              if (calcMultiplier >= autoVal) {
+                cashout(pId, calcMultiplier);
               }
             }
           });
         }
 
-        if (localMultiplier >= crashMultiplierRef.current) {
-          localMultiplier = crashMultiplierRef.current;
+        if (calcMultiplier >= crashMultiplierRef.current) {
+          calcMultiplier = crashMultiplierRef.current;
           phaseRef.current = "crashed";
           setCurrentPhase("CRASHED");
-          setCurrentMultiplier(localMultiplier);
-          multiplierRef.current = localMultiplier;
+          setCurrentMultiplier(calcMultiplier);
+          multiplierRef.current = calcMultiplier;
 
           if (!hasFetchedCrash.current) {
             hasFetchedCrash.current = true;
@@ -227,17 +237,22 @@ export default function HighFlyerGame() {
             }));
           }
         } else {
-          setCurrentMultiplier(localMultiplier);
-          multiplierRef.current = localMultiplier;
+          setCurrentMultiplier(calcMultiplier);
+          multiplierRef.current = calcMultiplier;
         }
       } else if (phaseRef.current === "crashed") {
-        setCountdownTimer((prev) => {
-          if (prev <= 0) {
-            fetchStateFromServer();
-            return 3;
-          }
-          return prev - 1;
-        });
+        const diff = nextRoundTimeRef.current - now;
+        const secs = Math.ceil(diff / 1000);
+
+        if (secs !== lastSec && secs >= 0) {
+          lastSec = secs;
+          setCountdownTimer(secs > 0 ? secs : 3);
+        }
+
+        if (diff <= 0 && now - lastCrashFetch > 2000) {
+          lastCrashFetch = now;
+          fetchStateFromServer();
+        }
       }
 
       animationFrameId = requestAnimationFrame(gameLoop);
@@ -247,6 +262,7 @@ export default function HighFlyerGame() {
 
     return () => cancelAnimationFrame(animationFrameId);
   }, [isAuthenticated]);
+
   // ==========================================
   // ৩. হিস্ট্রি পিলস পোলিং
   // ==========================================
