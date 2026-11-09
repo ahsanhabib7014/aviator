@@ -50,10 +50,10 @@ export default function HighFlyerGame() {
   const animationFrameId = useRef(null);
   const panelsRef = useRef(panels);
   const hasFetchedCrash = useRef(false);
-
-  // 🆕 গেমের আসল সময় ট্র্যাক করার জন্য
-  const gameStartTimeRef = useRef(0);
-  const nextRoundTimeRef = useRef(0);
+  
+  // 🆕 সার্ভার টাইম ট্র্যাকিংয়ের জন্য
+  const serverStartTimeRef = useRef(0);
+  const serverNextRoundTimeRef = useRef(0);
 
   useEffect(() => {
     panelsRef.current = panels;
@@ -82,7 +82,6 @@ export default function HighFlyerGame() {
       let retries = 2;
       while (retries > 0 && (res.status === 401 || res.status >= 500)) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-
         res = await fetch("/api/user/me", {
           credentials: "include",
           cache: "no-store",
@@ -119,12 +118,13 @@ export default function HighFlyerGame() {
   }, [checkAuth]);
 
   // ==========================================
-  // ২. গেম স্টেট পোলিং (সম্পূর্ণ ল্যাগমুক্ত)
+  // ২. গেম স্টেট পোলিং (সার্ভারের সময় ব্যবহার করে)
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
 
     let animationFrameId;
+    let lastFetchedStatus = "";
 
     const fetchStateFromServer = async () => {
       try {
@@ -143,19 +143,20 @@ export default function HighFlyerGame() {
           multiplierRef.current = data.multiplier || 1.0;
           crashMultiplierRef.current = data.crashAt || 2.0;
 
-          // 🆕 সার্ভার থেকে আসা টাইম সেভ করা
-          nextRoundTimeRef.current = data.nextRoundTime || 0;
-          // সার্ভারের মাল্টিপ্লায়ার থেকে গেমের শুরুর সময় বের করা
-          // সার্ভার ফর্মুলা: multiplier = 1 + (timePassed * 0.55)^1.45
-          if (data.status === "flying" && data.multiplier > 1) {
-            const timePassed = Math.pow(data.multiplier - 1, 1 / 1.45) / 0.55;
-            gameStartTimeRef.current = Date.now() - timePassed * 1000;
-          }
+          // 🆕 সার্ভারের আসল সময় সেভ করা
+          serverStartTimeRef.current = data.startTime || 0;
+          serverNextRoundTimeRef.current = data.nextRoundTime || 0;
 
+          // সার্ভারের মাল্টিপ্লায়ার সরাসরি সেট করা
           setCurrentMultiplier(multiplierRef.current);
 
           if (typeof data.balance === "number") {
             setUserBalance(Number(data.balance).toFixed(2));
+          }
+
+          if (data.status === "waiting") {
+            const timeLeft = Math.ceil((serverNextRoundTimeRef.current - Date.now()) / 1000);
+            setCountdownTimer(timeLeft > 0 ? timeLeft : 10);
           }
 
           if (data.bets) {
@@ -178,34 +179,34 @@ export default function HighFlyerGame() {
       }
     };
 
+    // পেজ লোডে প্রথমবার কল
     fetchStateFromServer();
 
-    let lastSec = -1;
-    let lastCrashFetch = 0;
-
-    // 🆕 মূল গেম লুপ (ঘড়ির সময়ের ওপর নির্ভরশীল, তাই কখনো আটকাবে না)
+    // 🆕 গেম লুপ (ঘড়ির সময়ের ওপর নির্ভরশীল, তাই কখনো আটকাবে না)
     const gameLoop = () => {
       const now = Date.now();
 
       if (phaseRef.current === "waiting") {
-        // সার্ভারের nextRoundTime থেকে ঠিক কত সেকেন্ড বাকি তা বের করা
-        const diff = nextRoundTimeRef.current - now;
+        // সার্ভারের nextRoundTime থেকে কাউন্টডাউন বের করা
+        const diff = serverNextRoundTimeRef.current - now;
         const secs = Math.ceil(diff / 1000);
-
-        if (secs !== lastSec && secs >= 0) {
-          lastSec = secs;
+        
+        if (secs >= 0) {
           setCountdownTimer(secs);
         }
 
-        if (diff <= 0 && now - lastCrashFetch > 2000) {
-          lastCrashFetch = now;
+        if (diff <= 0 && lastFetchedStatus !== "waiting_fetched") {
+          lastFetchedStatus = "waiting_fetched";
           fetchStateFromServer();
+          setTimeout(() => { lastFetchedStatus = ""; }, 2000);
         }
-      } else if (phaseRef.current === "flying") {
-        // 🆕 সার্ভারের শুরুর সময় থেকে হিসাব করা (ল্যাগ হলেও মাল্টিপ্লায়ার সঠিক থাকবে)
-        const timePassed = (now - gameStartTimeRef.current) / 1000;
-        let calcMultiplier = 1.0 + Math.pow(timePassed * 0.55, 1.45);
 
+      } else if (phaseRef.current === "flying") {
+        // 🆕 সার্ভারের startTime থেকে মাল্টিপ্লায়ার হিসাব করা
+        // সার্ভার ফর্মুলা: 1 + (timePassed * 0.55)^1.45
+        const timePassed = (now - serverStartTimeRef.current) / 1000;
+        let calcMultiplier = 1.00 + Math.pow(timePassed * 0.55, 1.45);
+        
         if (calcMultiplier < 1) calcMultiplier = 1;
 
         // Auto Cashout চেক
@@ -240,18 +241,19 @@ export default function HighFlyerGame() {
           setCurrentMultiplier(calcMultiplier);
           multiplierRef.current = calcMultiplier;
         }
-      } else if (phaseRef.current === "crashed") {
-        const diff = nextRoundTimeRef.current - now;
-        const secs = Math.ceil(diff / 1000);
 
-        if (secs !== lastSec && secs >= 0) {
-          lastSec = secs;
+      } else if (phaseRef.current === "crashed") {
+        const diff = serverNextRoundTimeRef.current - now;
+        const secs = Math.ceil(diff / 1000);
+        
+        if (secs >= 0) {
           setCountdownTimer(secs > 0 ? secs : 3);
         }
 
-        if (diff <= 0 && now - lastCrashFetch > 2000) {
-          lastCrashFetch = now;
+        if (diff <= 0 && lastFetchedStatus !== "crashed_fetched") {
+          lastFetchedStatus = "crashed_fetched";
           fetchStateFromServer();
+          setTimeout(() => { lastFetchedStatus = ""; }, 2000);
         }
       }
 
