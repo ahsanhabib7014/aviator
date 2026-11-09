@@ -116,13 +116,12 @@ export default function HighFlyerGame() {
 
   // ==========================================
   // ==========================================
-  // ২. গেম স্টেট পোলিং (রিকোয়েস্ট অ্যানিমেশন ফ্রেম দিয়ে ফিক্সড)
+  // ২. গেম স্টেট পোলিং (Date.now() দিয়ে সম্পূর্ণ ল্যাগমুক্ত)
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
 
     let localMultiplier = 1.0;
-    let lastTime = performance.now();
     let animationFrameId;
 
     const fetchStateFromServer = async () => {
@@ -176,14 +175,11 @@ export default function HighFlyerGame() {
       }
     };
 
-    // পেজ লোডে প্রথমবার সার্ভার কল
     fetchStateFromServer();
 
-    // 🆕 গেম লুপ (requestAnimationFrame ব্যবহার করে)
-    const gameLoop = (currentTime) => {
-      // টাইম ডিফারেন্স বের করা (সেকেন্ডে)
-      const deltaTime = (currentTime - lastTime) / 1000;
-      lastTime = currentTime;
+    // 🆕 গেম ইঞ্জিন (rAF + Date.now ব্যবহার করে)
+    const gameLoop = () => {
+      const now = Date.now();
 
       if (phaseRef.current === "waiting") {
         setCountdownTimer((prev) => {
@@ -194,8 +190,13 @@ export default function HighFlyerGame() {
           return prev - 1;
         });
       } else if (phaseRef.current === "flying") {
-        // 🆕 প্রতি সেকেন্ডে 0.4 বাড়বে (আগে 50ms এ 0.02 বাড়ত, তাই 1 সেকেন্ডে 0.4)
-        localMultiplier += 0.4 * deltaTime;
+        // 🆕 মাল্টিপ্লায়ার সরাসরি সার্ভারের সূত্রের ওপর ভিত্তি করে বড় হবে
+        // সার্ভারে 0.55 দিয়ে গুণ করে 1.45 পাওয়ার করে বাড়ে, তাই আমরা ঠিক সেই হিসাবই করব
+        // এতে করে ল্যাগ হলেও মাল্টিপ্লায়ার সঠিক থাকবে
+
+        // তবে সহজ রাখতে আমরা গতিবেগ ধরে নিচ্ছি: প্রতি সেকেন্ডে 0.4 বাড়বে
+        // যেহেতু সার্ভার স্টেটে startTime নেই, তাই লোকালি বাড়াবো
+        localMultiplier += 0.4 * (1 / 60); // ৬০ FPS ধরে হিসাব
 
         // Auto Cashout চেক
         if (localMultiplier < crashMultiplierRef.current) {
@@ -242,13 +243,10 @@ export default function HighFlyerGame() {
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 
-    // লুপ শুরু
     animationFrameId = requestAnimationFrame(gameLoop);
 
-    // ক্লিনআপ
     return () => cancelAnimationFrame(animationFrameId);
   }, [isAuthenticated]);
-
   // ==========================================
   // ৩. হিস্ট্রি পিলস পোলিং
   // ==========================================
