@@ -134,22 +134,18 @@ export default function HighFlyerGame() {
     if (gameState.roundId) setRoundId(gameState.roundId);
     if (gameState.crashAt) crashMultiplierRef.current = gameState.crashAt;
 
+    // 🆕 সার্ভার টাইম সিঙ্ক (VPS ল্যাটেন্সি ঠিক করার জন্য)
+    if (gameState.serverTime) {
+      // সার্ভার এবং লোকাল টাইমের পার্থক্য বের করা
+      clockOffsetRef.current = gameState.serverTime - Date.now();
+    }
+
     // 🆕 সার্ভারের startTime এবং nextRoundTime সেভ করা
     if (gameState.startTime) serverStartTimeRef.current = gameState.startTime;
     if (gameState.nextRoundTime)
       serverNextRoundTimeRef.current = gameState.nextRoundTime;
 
-    // 🆕 টাইমার সিঙ্ক (শুধু waiting স্টেটে, যাতে ১০ সেকেন্ড থেকেই শুরু হয়)
-    if (gameState.status === "waiting" && gameState.nextRoundTime) {
-      const diff = Math.ceil((gameState.nextRoundTime - Date.now()) / 1000);
-      // যদি কাউন্টডাউন ০ এর নিচে থাকে বা ১০ এর বেশি না হয়
-      if (diff > 0 && diff <= 10) {
-        setCountdownTimer(diff);
-      } else if (diff > 10) {
-        setCountdownTimer(10);
-      }
-    }
-
+    // 🆕 সার্ভারের মাল্টিপ্লায়ার রেফে সেভ করা
     if (gameState.status === "flying") {
       multiplierRef.current = gameState.multiplier;
       setCurrentMultiplier(gameState.multiplier);
@@ -165,6 +161,7 @@ export default function HighFlyerGame() {
       setTotalBetsAmount(gameState.totalBetsAmount || 0);
     }
 
+    // 🆕 শুধুমাত্র নতুন রাউন্ড শুরু হলেই প্যানেল রিসেট হবে
     if (gameState.roundId && gameState.roundId !== roundIdRef.current) {
       roundIdRef.current = gameState.roundId;
       setPanels((prev) => ({
@@ -220,7 +217,7 @@ export default function HighFlyerGame() {
   }, [socket]);
 
   // ==========================================
-  // ৪. লোকাল গেম লুপ (সার্ভার টাইম সিঙ্ক)
+  // ৪. লোকাল গেম লুপ (সার্ভারের ডাটা থেকে)
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -232,43 +229,26 @@ export default function HighFlyerGame() {
       const now = Date.now();
 
       if (phaseRef.current === "waiting") {
-        // 🆕 সার্ভারের nextRoundTime থেকে সরাসরি কাউন্টডাউন
         const diff = serverNextRoundTimeRef.current - now;
         const secs = Math.ceil(diff / 1000);
-
-        // 🆕 যদি secs ১০ এর বেশি হয়, তবে ১০ দেখাবে। যদি ০ এর কম হয়, তবে ০ দেখাবে।
-        const displaySecs = Math.min(10, Math.max(0, secs));
-
-        if (displaySecs !== lastSec) {
-          lastSec = displaySecs;
-          setCountdownTimer(displaySecs);
+        if (secs !== lastSec && secs >= 0) {
+          lastSec = secs;
+          setCountdownTimer(secs);
         }
       } else if (phaseRef.current === "flying") {
-        // সার্ভারের startTime থেকে মাল্টিপ্লায়ার হিসাব
-        const timePassed = (now - serverStartTimeRef.current) / 1000;
-        let calcMultiplier = 1.0 + Math.pow(timePassed * 0.55, 1.45);
-        if (calcMultiplier < 1) calcMultiplier = 1;
+        // 🆕 অটো ক্যাশআউট চেক (সার্ভারের মাল্টিপ্লায়ার দিয়ে)
+        const currentServerMultiplier = multiplierRef.current;
 
-        // অটো ক্যাশআউট চেক
-        if (calcMultiplier < crashMultiplierRef.current) {
+        if (currentServerMultiplier < crashMultiplierRef.current) {
           [1, 2].forEach((pId) => {
             const p = panelsRef.current[pId];
             if (p.hasBet && !p.cashedOut && p.autoCash) {
               const autoVal = Number(p.autoVal);
-              if (calcMultiplier >= autoVal) {
+              if (currentServerMultiplier >= autoVal) {
                 handleCashout(pId, autoVal);
               }
             }
           });
-        }
-
-        if (calcMultiplier >= crashMultiplierRef.current) {
-          calcMultiplier = crashMultiplierRef.current;
-          setCurrentMultiplier(calcMultiplier);
-          multiplierRef.current = calcMultiplier;
-        } else {
-          setCurrentMultiplier(calcMultiplier);
-          multiplierRef.current = calcMultiplier;
         }
       } else if (phaseRef.current === "crashed") {
         const diff = serverNextRoundTimeRef.current - now;
