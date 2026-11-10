@@ -138,49 +138,47 @@
 // //////////////////////////////////
 import mongoose from "mongoose";
 
-// ✅ Mongoose deprecation warning fix
 mongoose.set("returnDocument", "after");
 mongoose.set("strictQuery", true);
 
-const MONGODB_URI = process.env.MONGODB_URI;
+const cached =
+  globalThis.mongoose ||
+  (globalThis.mongoose = {
+    conn: null,
+    promise: null,
+  });
 
-if (!MONGODB_URI) {
-  throw new Error(
-    "Please define the MONGODB_URI environment variable inside .env",
-  );
-}
+async function connectDB() {
+  const MONGODB_URI = process.env.MONGODB_URI;
 
-let cached = global.mongoose;
+  if (!MONGODB_URI) {
+    throw new Error(
+      "MONGODB_URI is missing at runtime. Add it to the Docker environment.",
+    );
+  }
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
-
-async function dbConnect() {
   if (cached.conn) {
     return cached.conn;
   }
 
   if (!cached.promise) {
-    const opts = {
+    cached.promise = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
-    };
-
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      return mongoose;
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+      socketTimeoutMS: 20000,
     });
   }
 
   try {
     cached.conn = await cached.promise;
-  } catch (e) {
+  } catch (error) {
     cached.promise = null;
-    throw e;
+    cached.conn = null;
+    throw error;
   }
 
   return cached.conn;
 }
 
-export default dbConnect;
-
-//////////////////////////////////////////
+export default connectDB;
