@@ -10,7 +10,7 @@
 // const { CrashGameSetting } = require("./models/CrashGameSetting"); // 🆕 অ্যাডমিন সেটিংস
 
 // const dev = process.env.NODE_ENV !== "production";
-// const hostname = "localhost";
+// const hostname = "0.0.0.0";
 // const port = parseInt(process.env.PORT || "3000", 10);
 // const app = next({ dev, hostname, port });
 // const handle = app.getRequestHandler();
@@ -30,7 +30,7 @@
 
 //   const io = new Server(server, {
 //     cors: {
-//       origin: "http://localhost:3000",
+//       origin: process.env.CLIENT_ORIGIN || "https://mitupay.tech",
 //       credentials: true,
 //     },
 //   });
@@ -368,7 +368,7 @@
 //     console.log(`> Ready on http://${hostname}:${port}`);
 //   });
 // });
-// /////////////////////////////////////
+// /////////////////////////////////////////
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
@@ -378,7 +378,7 @@ const jwt = require("jsonwebtoken");
 
 const User = require("./models/User").default || require("./models/User");
 const { CrashRound } = require("./models/CrashRound");
-const { CrashGameSetting } = require("./models/CrashGameSetting"); // 🆕 অ্যাডমিন সেটিংস
+const { CrashGameSetting } = require("./models/CrashGameSetting");
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -557,13 +557,15 @@ app.prepare().then(() => {
             message: "ক্যাশআউট করার মত কোনো বেট নেই!",
           });
 
+        // 🆕 ক্লায়েন্ট এবং সার্ভারের মাল্টিপ্লায়ার চেক
         const serverMultiplier = gameState.multiplier;
         const clientMultiplier =
           Number(data?.targetMultiplier) || serverMultiplier;
 
         let finalMultiplier = serverMultiplier;
-        const diff = serverMultiplier - clientMultiplier;
-        if (clientMultiplier > 1.0 && diff >= 0 && diff <= 0.3) {
+
+        // 🆕 ক্লায়েন্টের পাঠানো ভ্যালু সার্ভারের চেয়ে কম বা সমান হলে সেটি গ্রহণ করা
+        if (clientMultiplier > 1.0 && clientMultiplier <= serverMultiplier) {
           finalMultiplier = clientMultiplier;
         }
 
