@@ -7,7 +7,7 @@
 
 // const User = require("./models/User").default || require("./models/User");
 // const { CrashRound } = require("./models/CrashRound");
-// const { CrashGameSetting } = require("./models/CrashGameSetting"); // 🆕 অ্যাডমিন সেটিংস
+// const { CrashGameSetting } = require("./models/CrashGameSetting");
 
 // const dev = process.env.NODE_ENV !== "production";
 // const hostname = "0.0.0.0";
@@ -75,9 +75,15 @@
 //     }, {});
 
 //     const userToken = cookies["token"] || null;
-//     socket.emit("gameState", { ...gameState, history });
 
-//     // 🆕 ক্লায়েন্ট থেকে বেট আসলে (Atomic Update সহ)
+//     // 🆕 কানেক্ট হওয়ার সময় সার্ভারের বর্তমান সময়ও পাঠানো হলো
+//     socket.emit("gameState", {
+//       ...gameState,
+//       history,
+//       serverTime: Date.now(),
+//     });
+
+//     // 🆕 ক্লায়েন্ট থেকে বেট আসলে
 //     socket.on("placeBet", async (data) => {
 //       try {
 //         if (
@@ -113,7 +119,7 @@
 //           });
 //         }
 
-//         // 🆕 Atomic Update: ডাবল বেট প্রতিরোধ
+//         // Atomic Update: ডাবল বেট প্রতিরোধ
 //         const updatedRound = await CrashRound.findOneAndUpdate(
 //           {
 //             periodNumber: gameState.roundId,
@@ -156,7 +162,11 @@
 //           message: `৳${amount} বেট সফল হয়েছে!`,
 //           newBalance: updatedUser.balance,
 //         });
-//         io.emit("gameState", { ...gameState, history });
+//         io.emit("gameState", {
+//           ...gameState,
+//           history,
+//           serverTime: Date.now(), // 🆕
+//         });
 //       } catch (err) {
 //         console.error("Bet Error:", err);
 //         socket.emit("betError", { message: "সার্ভার এরর" });
@@ -191,14 +201,13 @@
 //           Number(data?.targetMultiplier) || serverMultiplier;
 
 //         let finalMultiplier = serverMultiplier;
-//         const diff = serverMultiplier - clientMultiplier;
-//         if (clientMultiplier > 1.0 && diff >= 0 && diff <= 0.3) {
+
+//         if (clientMultiplier > 1.0 && clientMultiplier <= serverMultiplier) {
 //           finalMultiplier = clientMultiplier;
 //         }
 
 //         const winAmount = Number((bet.amount * finalMultiplier).toFixed(2));
 
-//         // 🆕 Atomic Update: ডাবল ক্যাশআউট প্রতিরোধ
 //         await CrashRound.findOneAndUpdate(
 //           {
 //             periodNumber: gameState.roundId,
@@ -224,7 +233,11 @@
 //           multiplier: finalMultiplier,
 //           winAmount,
 //         });
-//         io.emit("gameState", { ...gameState, history });
+//         io.emit("gameState", {
+//           ...gameState,
+//           history,
+//           serverTime: Date.now(), // 🆕
+//         });
 //       } catch (err) {
 //         console.error("Cashout Error:", err);
 //         socket.emit("cashoutError", { message: "সার্ভার এরর" });
@@ -245,7 +258,6 @@
 //       gameState.multiplier = 1.0;
 //       gameState.startTime = now;
 
-//       // 🆕 অ্যাডমিন প্যানেল থেকে Force Multiplier বা Target Profit চেক করা
 //       try {
 //         const settings = (await CrashGameSetting.findOne({}).lean()) || {
 //           targetProfitPercent: 0,
@@ -286,7 +298,6 @@
 //                 (14.0 + Math.random() * 50).toFixed(2),
 //               );
 //           } else {
-//             // 🆕 বর্তমান রাউন্ডের মোট বেট সঠিকভাবে হিসাব করা
 //             const totalCollection =
 //               gameState.bets.reduce(
 //                 (sum, b) => sum + Number(b.amount || 0),
@@ -310,10 +321,14 @@
 //         gameState.crashAt = finalCrashPoint;
 //       } catch (err) {
 //         console.error("Settings Error:", err);
-//         gameState.crashAt = parseFloat((Math.random() * 10 + 1.5).toFixed(2)); // ফলব্যাক
+//         gameState.crashAt = parseFloat((Math.random() * 10 + 1.5).toFixed(2));
 //       }
 
-//       io.emit("gameState", { ...gameState, history });
+//       io.emit("gameState", {
+//         ...gameState,
+//         history,
+//         serverTime: Date.now(), // 🆕
+//       });
 //     } else if (gameState.status === "flying") {
 //       const timePassed = (now - gameState.startTime) / 1000;
 //       gameState.multiplier = parseFloat(
@@ -342,7 +357,11 @@
 //         history.unshift(gameState.crashAt);
 //         if (history.length > 20) history.pop();
 
-//         io.emit("gameState", { ...gameState, history });
+//         io.emit("gameState", {
+//           ...gameState,
+//           history,
+//           serverTime: Date.now(), // 🆕
+//         });
 
 //         setTimeout(() => {
 //           gameState.status = "waiting";
@@ -355,10 +374,18 @@
 
 //           gameState.totalBetsAmount = 0;
 //           gameState.bets = [];
-//           io.emit("gameState", { ...gameState, history });
+//           io.emit("gameState", {
+//             ...gameState,
+//             history,
+//             serverTime: Date.now(), // 🆕
+//           });
 //         }, 3200);
 //       } else {
-//         io.emit("gameState", { ...gameState, history });
+//         io.emit("gameState", {
+//           ...gameState,
+//           history,
+//           serverTime: Date.now(), // 🆕
+//         });
 //       }
 //     }
 //   }, 50);
@@ -368,7 +395,7 @@
 //     console.log(`> Ready on http://${hostname}:${port}`);
 //   });
 // });
-// /////////////////////////////////////////
+// //////////////////////////////////////////
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
@@ -406,19 +433,40 @@ app.prepare().then(() => {
     },
   });
 
-  // 🆕 রাউন্ড আইডি কাউন্টার
+  // 🆕 গেমের গ্লোবাল স্টেট (সবার জন্য একই থাকবে)
   let roundCounter = 1001;
+  let gameState = null;
 
-  let gameState = {
-    roundId: `CRASH-${roundCounter}`,
-    status: "waiting",
-    multiplier: 1.0,
-    crashAt: 2.0,
-    nextRoundTime: Date.now() + 10000,
-    startTime: 0,
-    totalBetsAmount: 0,
-    bets: [],
+  // 🆕 ডাটাবেস থেকে সর্বশেষ রাউন্ডের আইডি বের করার ফাংশন
+  const initializeGameState = async () => {
+    try {
+      const lastRound = await CrashRound.findOne().sort({ createdAt: -1 });
+      if (lastRound && lastRound.periodNumber) {
+        const lastNum = parseInt(lastRound.periodNumber.split("-")[1]);
+        if (!isNaN(lastNum)) {
+          roundCounter = lastNum + 1;
+          console.log(`🔄 Resuming from Round: CRASH-${roundCounter}`);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching last round:", err);
+    }
+
+    // গেমের স্টেট শুরু করা
+    gameState = {
+      roundId: `CRASH-${roundCounter}`,
+      status: "waiting",
+      multiplier: 1.0,
+      crashAt: 2.0,
+      nextRoundTime: Date.now() + 10000,
+      startTime: 0,
+      totalBetsAmount: 0,
+      bets: [],
+    };
   };
+
+  // সার্ভার চালু হওয়ার সাথে সাথে ডাটাবেস থেকে রাউন্ড আইডি সেট করা
+  initializeGameState();
 
   let history = [];
 
@@ -446,6 +494,12 @@ app.prepare().then(() => {
     }, {});
 
     const userToken = cookies["token"] || null;
+
+    // 🆕 যদি গেম স্টেট এখনো তৈরি না হয়, তবে অপেক্ষা করা
+    if (!gameState) {
+      socket.emit("betError", { message: "গেম লোড হচ্ছে, অপেক্ষা করুন..." });
+      return;
+    }
 
     // 🆕 কানেক্ট হওয়ার সময় সার্ভারের বর্তমান সময়ও পাঠানো হলো
     socket.emit("gameState", {
@@ -536,7 +590,7 @@ app.prepare().then(() => {
         io.emit("gameState", {
           ...gameState,
           history,
-          serverTime: Date.now(), // 🆕
+          serverTime: Date.now(),
         });
       } catch (err) {
         console.error("Bet Error:", err);
@@ -607,7 +661,7 @@ app.prepare().then(() => {
         io.emit("gameState", {
           ...gameState,
           history,
-          serverTime: Date.now(), // 🆕
+          serverTime: Date.now(),
         });
       } catch (err) {
         console.error("Cashout Error:", err);
@@ -622,6 +676,8 @@ app.prepare().then(() => {
 
   // 🆕 মূল গেম লুপ
   setInterval(async () => {
+    if (!gameState) return; // যদি স্টেট তৈরি না হয়, তবে অপেক্ষা করা
+
     const now = Date.now();
 
     if (gameState.status === "waiting" && now > gameState.nextRoundTime) {
@@ -698,7 +754,7 @@ app.prepare().then(() => {
       io.emit("gameState", {
         ...gameState,
         history,
-        serverTime: Date.now(), // 🆕
+        serverTime: Date.now(),
       });
     } else if (gameState.status === "flying") {
       const timePassed = (now - gameState.startTime) / 1000;
@@ -731,7 +787,7 @@ app.prepare().then(() => {
         io.emit("gameState", {
           ...gameState,
           history,
-          serverTime: Date.now(), // 🆕
+          serverTime: Date.now(),
         });
 
         setTimeout(() => {
@@ -748,14 +804,14 @@ app.prepare().then(() => {
           io.emit("gameState", {
             ...gameState,
             history,
-            serverTime: Date.now(), // 🆕
+            serverTime: Date.now(),
           });
         }, 3200);
       } else {
         io.emit("gameState", {
           ...gameState,
           history,
-          serverTime: Date.now(), // 🆕
+          serverTime: Date.now(),
         });
       }
     }
