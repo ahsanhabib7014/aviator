@@ -765,7 +765,7 @@ export default function HighFlyerGame() {
                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-2">
-                      {[10, 30, 50, 100, 500, 1000].map((amt) => (
+                      {[10, 30, 50, 100, 500, 1000, 5000, 10000].map((amt) => (
                         <button
                           key={amt}
                           onClick={() => addBetAmount(pId, amt)}
