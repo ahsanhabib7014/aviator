@@ -138,53 +138,49 @@
 // //////////////////////////////////
 import mongoose from "mongoose";
 
+// ✅ Mongoose deprecation warning fix
 mongoose.set("returnDocument", "after");
 mongoose.set("strictQuery", true);
+
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error(
+    "Please define the MONGODB_URI environment variable inside .env",
+  );
+}
 
 let cached = global.mongoose;
 
 if (!cached) {
-  cached = global.mongoose = {
-    conn: null,
-    promise: null,
-  };
+  cached = global.mongoose = { conn: null, promise: null };
 }
 
 async function dbConnect() {
-  const MONGODB_URI = process.env.MONGODB_URI;
-
-  if (!MONGODB_URI) {
-    throw new Error(
-      "MONGODB_URI is missing at runtime. Add it to the Docker environment.",
-    );
-  }
-
   if (cached.conn) {
     return cached.conn;
   }
 
   if (!cached.promise) {
-    const options = {
+    const opts = {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 10000,
-      socketTimeoutMS: 20000,
     };
 
-    cached.promise = mongoose
-      .connect(MONGODB_URI, options)
-      .then((mongooseInstance) => mongooseInstance);
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+      return mongoose;
+    });
   }
 
   try {
     cached.conn = await cached.promise;
-  } catch (error) {
+  } catch (e) {
     cached.promise = null;
-    cached.conn = null;
-    throw error;
+    throw e;
   }
 
   return cached.conn;
 }
 
 export default dbConnect;
+
+//////////////////////////////////////////
