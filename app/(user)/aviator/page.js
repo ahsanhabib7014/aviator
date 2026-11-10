@@ -133,13 +133,19 @@ export default function HighFlyerGame() {
     if (gameState.roundId) setRoundId(gameState.roundId);
     if (gameState.crashAt) crashMultiplierRef.current = gameState.crashAt;
 
+    // 🆕 সার্ভার টাইম সিঙ্ক (VPS ল্যাটেন্সি ঠিক করার জন্য)
+    if (gameState.serverTime) {
+      // সার্ভার এবং লোকাল টাইমের পার্থক্য বের করা
+      clockOffsetRef.current = gameState.serverTime - Date.now();
+    }
+
     // 🆕 সার্ভারের startTime এবং nextRoundTime সেভ করা
     if (gameState.startTime) serverStartTimeRef.current = gameState.startTime;
     if (gameState.nextRoundTime)
       serverNextRoundTimeRef.current = gameState.nextRoundTime;
 
+    // 🆕 সার্ভারের মাল্টিপ্লায়ার রেফে সেভ করা
     if (gameState.status === "flying") {
-      // 🆕 সার্ভারের মাল্টিপ্লায়ার রেফে সেভ করা
       multiplierRef.current = gameState.multiplier;
       setCurrentMultiplier(gameState.multiplier);
     }
@@ -154,6 +160,7 @@ export default function HighFlyerGame() {
       setTotalBetsAmount(gameState.totalBetsAmount || 0);
     }
 
+    // 🆕 শুধুমাত্র নতুন রাউন্ড শুরু হলেই প্যানেল রিসেট হবে
     if (gameState.roundId && gameState.roundId !== roundIdRef.current) {
       roundIdRef.current = gameState.roundId;
       setPanels((prev) => ({
@@ -162,7 +169,6 @@ export default function HighFlyerGame() {
       }));
     }
   }, [gameState]);
-
   // ==========================================
   // ৩. Socket ইভেন্ট লিসেনার
   // ==========================================
@@ -210,7 +216,7 @@ export default function HighFlyerGame() {
   }, [socket]);
 
   // ==========================================
-  // ৪. লোকাল গেম লুপ (সার্ভার টাইম সিঙ্ক)
+  // ৪. লোকাল গেম লুপ (সার্ভারের ডাটা থেকে)
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -222,7 +228,6 @@ export default function HighFlyerGame() {
       const now = Date.now();
 
       if (phaseRef.current === "waiting") {
-        // 🆕 সার্ভারের nextRoundTime থেকে কাউন্টডাউন
         const diff = serverNextRoundTimeRef.current - now;
         const secs = Math.ceil(diff / 1000);
         if (secs !== lastSec && secs >= 0) {
@@ -230,31 +235,19 @@ export default function HighFlyerGame() {
           setCountdownTimer(secs);
         }
       } else if (phaseRef.current === "flying") {
-        // 🆕 সার্ভারের startTime থেকে মাল্টিপ্লায়ার হিসাব
-        const timePassed = (now - serverStartTimeRef.current) / 1000;
-        let calcMultiplier = 1.0 + Math.pow(timePassed * 0.55, 1.45);
-        if (calcMultiplier < 1) calcMultiplier = 1;
+        // 🆕 অটো ক্যাশআউট চেক (সার্ভারের মাল্টিপ্লায়ার দিয়ে)
+        const currentServerMultiplier = multiplierRef.current;
 
-        // 🆕 অটো ক্যাশআউট চেক
-        if (calcMultiplier < crashMultiplierRef.current) {
+        if (currentServerMultiplier < crashMultiplierRef.current) {
           [1, 2].forEach((pId) => {
             const p = panelsRef.current[pId];
             if (p.hasBet && !p.cashedOut && p.autoCash) {
               const autoVal = Number(p.autoVal);
-              if (calcMultiplier >= autoVal) {
-                handleCashout(pId, autoVal); // 🆕 autoVal পাঠানো হলো
+              if (currentServerMultiplier >= autoVal) {
+                handleCashout(pId, autoVal);
               }
             }
           });
-        }
-
-        if (calcMultiplier >= crashMultiplierRef.current) {
-          calcMultiplier = crashMultiplierRef.current;
-          setCurrentMultiplier(calcMultiplier);
-          multiplierRef.current = calcMultiplier;
-        } else {
-          setCurrentMultiplier(calcMultiplier);
-          multiplierRef.current = calcMultiplier;
         }
       } else if (phaseRef.current === "crashed") {
         const diff = serverNextRoundTimeRef.current - now;

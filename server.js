@@ -446,9 +446,15 @@ app.prepare().then(() => {
     }, {});
 
     const userToken = cookies["token"] || null;
-    socket.emit("gameState", { ...gameState, history });
 
-    // 🆕 ক্লায়েন্ট থেকে বেট আসলে (Atomic Update সহ)
+    // 🆕 কানেক্ট হওয়ার সময় সার্ভারের বর্তমান সময়ও পাঠানো হলো
+    socket.emit("gameState", {
+      ...gameState,
+      history,
+      serverTime: Date.now(),
+    });
+
+    // 🆕 ক্লায়েন্ট থেকে বেট আসলে
     socket.on("placeBet", async (data) => {
       try {
         if (
@@ -484,7 +490,7 @@ app.prepare().then(() => {
           });
         }
 
-        // 🆕 Atomic Update: ডাবল বেট প্রতিরোধ
+        // Atomic Update: ডাবল বেট প্রতিরোধ
         const updatedRound = await CrashRound.findOneAndUpdate(
           {
             periodNumber: gameState.roundId,
@@ -527,7 +533,11 @@ app.prepare().then(() => {
           message: `৳${amount} বেট সফল হয়েছে!`,
           newBalance: updatedUser.balance,
         });
-        io.emit("gameState", { ...gameState, history });
+        io.emit("gameState", {
+          ...gameState,
+          history,
+          serverTime: Date.now(), // 🆕
+        });
       } catch (err) {
         console.error("Bet Error:", err);
         socket.emit("betError", { message: "সার্ভার এরর" });
@@ -557,21 +567,18 @@ app.prepare().then(() => {
             message: "ক্যাশআউট করার মত কোনো বেট নেই!",
           });
 
-        // 🆕 ক্লায়েন্ট এবং সার্ভারের মাল্টিপ্লায়ার চেক
         const serverMultiplier = gameState.multiplier;
         const clientMultiplier =
           Number(data?.targetMultiplier) || serverMultiplier;
 
         let finalMultiplier = serverMultiplier;
 
-        // 🆕 ক্লায়েন্টের পাঠানো ভ্যালু সার্ভারের চেয়ে কম বা সমান হলে সেটি গ্রহণ করা
         if (clientMultiplier > 1.0 && clientMultiplier <= serverMultiplier) {
           finalMultiplier = clientMultiplier;
         }
 
         const winAmount = Number((bet.amount * finalMultiplier).toFixed(2));
 
-        // 🆕 Atomic Update: ডাবল ক্যাশআউট প্রতিরোধ
         await CrashRound.findOneAndUpdate(
           {
             periodNumber: gameState.roundId,
@@ -597,7 +604,11 @@ app.prepare().then(() => {
           multiplier: finalMultiplier,
           winAmount,
         });
-        io.emit("gameState", { ...gameState, history });
+        io.emit("gameState", {
+          ...gameState,
+          history,
+          serverTime: Date.now(), // 🆕
+        });
       } catch (err) {
         console.error("Cashout Error:", err);
         socket.emit("cashoutError", { message: "সার্ভার এরর" });
@@ -618,7 +629,6 @@ app.prepare().then(() => {
       gameState.multiplier = 1.0;
       gameState.startTime = now;
 
-      // 🆕 অ্যাডমিন প্যানেল থেকে Force Multiplier বা Target Profit চেক করা
       try {
         const settings = (await CrashGameSetting.findOne({}).lean()) || {
           targetProfitPercent: 0,
@@ -659,7 +669,6 @@ app.prepare().then(() => {
                 (14.0 + Math.random() * 50).toFixed(2),
               );
           } else {
-            // 🆕 বর্তমান রাউন্ডের মোট বেট সঠিকভাবে হিসাব করা
             const totalCollection =
               gameState.bets.reduce(
                 (sum, b) => sum + Number(b.amount || 0),
@@ -683,10 +692,14 @@ app.prepare().then(() => {
         gameState.crashAt = finalCrashPoint;
       } catch (err) {
         console.error("Settings Error:", err);
-        gameState.crashAt = parseFloat((Math.random() * 10 + 1.5).toFixed(2)); // ফলব্যাক
+        gameState.crashAt = parseFloat((Math.random() * 10 + 1.5).toFixed(2));
       }
 
-      io.emit("gameState", { ...gameState, history });
+      io.emit("gameState", {
+        ...gameState,
+        history,
+        serverTime: Date.now(), // 🆕
+      });
     } else if (gameState.status === "flying") {
       const timePassed = (now - gameState.startTime) / 1000;
       gameState.multiplier = parseFloat(
@@ -715,7 +728,11 @@ app.prepare().then(() => {
         history.unshift(gameState.crashAt);
         if (history.length > 20) history.pop();
 
-        io.emit("gameState", { ...gameState, history });
+        io.emit("gameState", {
+          ...gameState,
+          history,
+          serverTime: Date.now(), // 🆕
+        });
 
         setTimeout(() => {
           gameState.status = "waiting";
@@ -728,10 +745,18 @@ app.prepare().then(() => {
 
           gameState.totalBetsAmount = 0;
           gameState.bets = [];
-          io.emit("gameState", { ...gameState, history });
+          io.emit("gameState", {
+            ...gameState,
+            history,
+            serverTime: Date.now(), // 🆕
+          });
         }, 3200);
       } else {
-        io.emit("gameState", { ...gameState, history });
+        io.emit("gameState", {
+          ...gameState,
+          history,
+          serverTime: Date.now(), // 🆕
+        });
       }
     }
   }, 50);
