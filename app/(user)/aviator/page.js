@@ -56,6 +56,7 @@ export default function HighFlyerGame() {
   // 🆕 সার্ভার টাইম ট্র্যাকিং
   const serverStartTimeRef = useRef(0);
   const serverNextRoundTimeRef = useRef(0);
+  const clockOffsetRef = useRef(0); // 🆕 এই লাইনটি যোগ করুন
 
   // 🆕 রাউন্ড ট্র্যাকিং (বাটন রিসেটের জন্য)
   const roundIdRef = useRef("");
