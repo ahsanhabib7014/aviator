@@ -146,7 +146,7 @@ export default function UserProfilePage() {
             উপলব্ধ ব্যালেন্স
           </p>
           <h1 className="text-base md:text-lg font-bold text-amber-400 font-mono mt-1 truncate">
-            ৳{profile.balance || 0}
+            ৳{(profile.balance || 0).toFixed(2)}
           </h1>
           <p className="text-xs md:text-sm text-slate-400 font-mono mt-1.5 truncate">
             টার্নওভার:{" "}

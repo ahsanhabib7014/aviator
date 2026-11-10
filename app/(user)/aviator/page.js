@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSocket } from "@/app/SocketProvider";
 
 export default function HighFlyerGame() {
   // --- STATE ---
@@ -9,7 +10,6 @@ export default function HighFlyerGame() {
   const [currentMultiplier, setCurrentMultiplier] = useState(1.0);
   const [countdownTimer, setCountdownTimer] = useState(10);
   const [roundId, setRoundId] = useState("...");
-
   const [multiplierHistory, setMultiplierHistory] = useState([]);
 
   const [panels, setPanels] = useState({
@@ -32,13 +32,15 @@ export default function HighFlyerGame() {
   const [liveBets, setLiveBets] = useState([]);
   const [totalBetsCount, setTotalBetsCount] = useState(0);
   const [totalBetsAmount, setTotalBetsAmount] = useState(0);
-
   const [lastResult, setLastResult] = useState(null);
   const [sidebarTab, setSidebarTab] = useState("bets");
   const [userHistory, setUserHistory] = useState([]);
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // 🆕 গ্লোবাল টোস্ট নোটিফিকেশন
+  const [toast, setToast] = useState(null);
 
   const router = useRouter();
 
@@ -55,6 +57,12 @@ export default function HighFlyerGame() {
   const serverStartTimeRef = useRef(0);
   const serverNextRoundTimeRef = useRef(0);
 
+  // 🆕 রাউন্ড ট্র্যাকিং (বাটন রিসেটের জন্য)
+  const roundIdRef = useRef("");
+
+  // 🆕 Socket.io কানেকশন
+  const { socket, gameState } = useSocket();
+
   useEffect(() => {
     panelsRef.current = panels;
   }, [panels]);
@@ -68,7 +76,6 @@ export default function HighFlyerGame() {
         credentials: "include",
         cache: "no-store",
       });
-
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.user) {
@@ -78,16 +85,13 @@ export default function HighFlyerGame() {
           return true;
         }
       }
-
       let retries = 2;
       while (retries > 0 && (res.status === 401 || res.status >= 500)) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-
         res = await fetch("/api/user/me", {
           credentials: "include",
           cache: "no-store",
         });
-
         if (res.ok) {
           const retryData = await res.json();
           if (retryData.success && retryData.user) {
@@ -99,16 +103,13 @@ export default function HighFlyerGame() {
         }
         retries -= 1;
       }
-
       if (res.status === 401) {
         setIsAuthenticated(false);
         router.push("/login");
       }
-
       setLoading(false);
       return false;
     } catch (err) {
-      console.error("Auth Check Error (Network):", err);
       setLoading(false);
       return false;
     }
@@ -119,118 +120,118 @@ export default function HighFlyerGame() {
   }, [checkAuth]);
 
   // ==========================================
-  // ২. গেম স্টেট পোলিং (সার্ভার টাইম সিঙ্ক সহ সম্পূর্ণ ফিক্সড)
+  // ২. Socket.io থেকে আসা ডাটা আপডেট
+  // ==========================================
+  useEffect(() => {
+    if (!gameState) return;
+
+    if (gameState.status !== phaseRef.current) {
+      setCurrentPhase(gameState.status.toUpperCase());
+      phaseRef.current = gameState.status.toLowerCase();
+    }
+
+    if (gameState.roundId) setRoundId(gameState.roundId);
+    if (gameState.crashAt) crashMultiplierRef.current = gameState.crashAt;
+
+    if (gameState.startTime) serverStartTimeRef.current = gameState.startTime;
+    if (gameState.nextRoundTime)
+      serverNextRoundTimeRef.current = gameState.nextRoundTime;
+
+    if (gameState.status === "flying") {
+      if (gameState.multiplier > multiplierRef.current) {
+        setCurrentMultiplier(gameState.multiplier);
+        multiplierRef.current = gameState.multiplier;
+      }
+    }
+
+    if (gameState.history) {
+      setMultiplierHistory(gameState.history);
+    }
+
+    if (gameState.bets) {
+      setLiveBets(gameState.bets);
+      setTotalBetsCount(gameState.totalBetsCount || gameState.bets.length || 0);
+      setTotalBetsAmount(gameState.totalBetsAmount || 0);
+    }
+
+    // 🆕 শুধুমাত্র নতুন রাউন্ড শুরু হলেই প্যানেল রিসেট হবে
+    if (gameState.roundId && gameState.roundId !== roundIdRef.current) {
+      roundIdRef.current = gameState.roundId;
+      setPanels((prev) => ({
+        1: { ...prev[1], hasBet: false, cashedOut: false },
+        2: { ...prev[2], hasBet: false, cashedOut: false },
+      }));
+    }
+  }, [gameState]);
+
+  // ==========================================
+  // ৩. Socket ইভেন্ট লিসেনার
+  // ==========================================
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("betSuccess", (data) => {
+      setUserBalance(Number(data.newBalance).toFixed(2));
+      setToast({ type: "success", message: data.message });
+      setTimeout(() => setToast(null), 3000);
+    });
+
+    socket.on("betError", (data) => {
+      setToast({ type: "error", message: data.message });
+      setTimeout(() => setToast(null), 3000);
+      setPanels((prev) => ({
+        1: { ...prev[1], hasBet: false },
+        2: { ...prev[2], hasBet: false },
+      }));
+    });
+
+    socket.on("cashoutSuccess", (data) => {
+      setUserBalance(Number(data.newBalance).toFixed(2));
+      setLastResult({
+        type: "win",
+        multiplier: data.multiplier,
+        amount: data.winAmount,
+      });
+      setToast({ type: "success", message: data.message });
+      setTimeout(() => setLastResult(null), 4000);
+      setTimeout(() => setToast(null), 3000);
+    });
+
+    socket.on("cashoutError", (data) => {
+      setToast({ type: "error", message: data.message });
+      setTimeout(() => setToast(null), 3000);
+    });
+
+    return () => {
+      socket.off("betSuccess");
+      socket.off("betError");
+      socket.off("cashoutSuccess");
+      socket.off("cashoutError");
+    };
+  }, [socket]);
+
+  // ==========================================
+  // ৪. লোকাল গেম লুপ (মাল্টিপ্লায়ার স্মুথ আপডেট)
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    let localMultiplier = 1.0;
     let animationFrameId;
-
-    // 🆕 সার্ভারের সাথে লোকাল ঘড়ির পার্থক্য বের করার ভেরিয়েবল
-    let clockOffset = 0;
     let lastSec = -1;
-    let lastFetch = 0;
 
-    const fetchStateFromServer = async () => {
-      try {
-        const res = await fetch("/api/crash-game/state", {
-          credentials: "include",
-        });
-        if (res.status === 401) return;
-
-        const data = await res.json();
-
-        if (data && data.status) {
-          setRoundId(data.roundId || "...");
-          setCurrentPhase(data.status.toUpperCase());
-
-          phaseRef.current = data.status.toLowerCase();
-          multiplierRef.current = data.multiplier || 1.0;
-          crashMultiplierRef.current = data.crashAt || 2.0;
-          localMultiplier = data.multiplier || 1.0;
-
-          // 🆕 সার্ভারের টাইম রেফ-এ সেভ করা
-          serverStartTimeRef.current = data.startTime || 0;
-          serverNextRoundTimeRef.current = data.nextRoundTime || 0;
-
-          setCurrentMultiplier(localMultiplier);
-
-          if (typeof data.balance === "number") {
-            setUserBalance(Number(data.balance).toFixed(2));
-          }
-
-          // 🆕 সার্ভার এবং লোকাল টাইমের পার্থক্য বের করা (Clock Sync)
-          const localNow = Date.now();
-          if (data.nextRoundTime) {
-            // সার্ভার যদি waiting এ থাকে, তবে nextRoundTime এর ১০ সেকেন্ড আগে গেম শুরু হয়েছে
-            const estimatedServerStart = data.nextRoundTime - 10000;
-            // লোকাল টাইম এবং সার্ভার স্টার্ট টাইমের পার্থক্য
-            if (data.status === "waiting") {
-              clockOffset = localNow - estimatedServerStart;
-            }
-          }
-
-          if (data.status === "flying" && data.startTime) {
-            // যদি ফ্লাইং থাকে, সার্ভারের startTime এর সাথে লোকাল টাইমের পার্থক্য
-            clockOffset = localNow - data.startTime;
-          }
-
-          if (data.status === "waiting") {
-            // 🆕 সঠিক কাউন্টডাউন বের করা
-            const timeLeft = Math.ceil((data.nextRoundTime - localNow) / 1000);
-            const validTime = timeLeft > 0 ? timeLeft : 10;
-            setCountdownTimer(validTime);
-            lastSec = validTime;
-          }
-
-          if (data.bets) {
-            setLiveBets(data.bets);
-            setTotalBetsCount(data.totalBetsCount || 0);
-            setTotalBetsAmount(data.totalBetsAmount || 0);
-          }
-
-          if (data.lastResult && data.lastResult.type === "win") {
-            setLastResult(data.lastResult);
-            setTimeout(() => setLastResult(null), 4000);
-          }
-
-          if (data.status === "crashed") {
-            hasFetchedCrash.current = false;
-          }
-        }
-      } catch (err) {
-        console.error("State API Error:", err);
-      }
-    };
-
-    fetchStateFromServer();
-
-    // 🆕 গেম লুপ (রিকোয়েস্ট অ্যানিমেশন ফ্রেম)
     const gameLoop = () => {
-      // সার্ভারের সঠিক বর্তমান সময় বের করা (লোকাল টাইম - অফসেট)
-      const serverNow = Date.now() - clockOffset;
+      const now = Date.now();
 
       if (phaseRef.current === "waiting") {
-        // সার্ভারের nextRoundTime এর সাথে বর্তমান সার্ভার টাইমের পার্থক্য
-        const diff = serverNextRoundTimeRef.current - serverNow;
+        const diff = serverNextRoundTimeRef.current - now;
         const secs = Math.ceil(diff / 1000);
-
         if (secs !== lastSec && secs >= 0) {
           lastSec = secs;
           setCountdownTimer(secs);
         }
-
-        // কাউন্টডাউন শেষ হলে সার্ভার কল (প্রতি ১.৫ সেকেন্ডে একবার)
-        if (diff <= 0 && Date.now() - lastFetch > 1500) {
-          lastFetch = Date.now();
-          fetchStateFromServer();
-        }
       } else if (phaseRef.current === "flying") {
-        // মাল্টিপ্লায়ার হিসাব (সার্ভারের startTime এবং সিঙ্ক্রোনাইজড টাইম দিয়ে)
-        const timePassed = (serverNow - serverStartTimeRef.current) / 1000;
+        const timePassed = (now - serverStartTimeRef.current) / 1000;
         let calcMultiplier = 1.0 + Math.pow(timePassed * 0.55, 1.45);
-
         if (calcMultiplier < 1) calcMultiplier = 1;
 
         // Auto Cashout চেক
@@ -240,7 +241,7 @@ export default function HighFlyerGame() {
             if (p.hasBet && !p.cashedOut && p.autoCash) {
               const autoVal = Number(p.autoVal);
               if (calcMultiplier >= autoVal) {
-                cashout(pId, calcMultiplier);
+                handleCashout(pId, autoVal);
               }
             }
           });
@@ -248,102 +249,60 @@ export default function HighFlyerGame() {
 
         if (calcMultiplier >= crashMultiplierRef.current) {
           calcMultiplier = crashMultiplierRef.current;
-          phaseRef.current = "crashed";
-          setCurrentPhase("CRASHED");
           setCurrentMultiplier(calcMultiplier);
           multiplierRef.current = calcMultiplier;
-
-          if (!hasFetchedCrash.current) {
-            hasFetchedCrash.current = true;
-            fetchStateFromServer();
-            setPanels((prev) => ({
-              1: { ...prev[1], hasBet: false, cashedOut: false },
-              2: { ...prev[2], hasBet: false, cashedOut: false },
-            }));
-          }
         } else {
           setCurrentMultiplier(calcMultiplier);
           multiplierRef.current = calcMultiplier;
         }
       } else if (phaseRef.current === "crashed") {
-        const diff = serverNextRoundTimeRef.current - serverNow;
+        const diff = serverNextRoundTimeRef.current - now;
         const secs = Math.ceil(diff / 1000);
-
         if (secs !== lastSec && secs >= 0) {
           lastSec = secs;
           setCountdownTimer(secs > 0 ? secs : 3);
         }
-
-        if (diff <= 0 && Date.now() - lastFetch > 1500) {
-          lastFetch = Date.now();
-          fetchStateFromServer();
-        }
       }
-
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 
     animationFrameId = requestAnimationFrame(gameLoop);
-
     return () => cancelAnimationFrame(animationFrameId);
   }, [isAuthenticated]);
 
   // ==========================================
-  // ৩. হিস্ট্রি পিলস পোলিং
+  // ৫. হিস্ট্রি (Socket থেকে আসছে, API পোলিং নেই)
   // ==========================================
-  useEffect(() => {
-    if (!isAuthenticated) return;
+  const fetchUserHistory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/crash-game/user-history", {
+        credentials: "include",
+      });
+      if (res.status === 401) return;
+      const data = await res.json();
+      if (data.success) setUserHistory(data.history);
+    } catch (err) {}
+  }, []);
 
-    const fetchHistory = async () => {
-      try {
-        const res = await fetch("/api/crash-game/history", {
-          credentials: "include",
-        });
-        if (res.status === 401) return;
-        const data = await res.json();
-        if (data.success && data.history && data.history.length > 0) {
-          setMultiplierHistory(data.history);
-        }
-      } catch (err) {}
-    };
-
-    fetchHistory();
-    const interval = setInterval(fetchHistory, 10000);
-    return () => clearInterval(interval);
-  }, [isAuthenticated]);
-
-  // ==========================================
-  // ৪. ইউজারের নিজের হিস্ট্রি ফেচ
-  // ==========================================
   useEffect(() => {
     if (!isAuthenticated || sidebarTab !== "history") return;
-
-    const fetchUserHistory = async () => {
-      try {
-        const res = await fetch("/api/crash-game/user-history", {
-          credentials: "include",
-        });
-        if (res.status === 401) return;
-        const data = await res.json();
-        if (data.success) {
-          setUserHistory(data.history);
-        }
-      } catch (err) {}
-    };
-
     fetchUserHistory();
-  }, [sidebarTab, isAuthenticated]);
+  }, [sidebarTab, isAuthenticated, fetchUserHistory]);
+
+  useEffect(() => {
+    if (sidebarTab === "history" && gameState?.roundId) {
+      fetchUserHistory();
+    }
+  }, [gameState?.roundId, sidebarTab, fetchUserHistory]);
 
   // ==========================================
-  // ৫. ক্যানভাস অ্যানিমেশন
+  // ৬. ক্যানভাস অ্যানিমেশন
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-
     const planeImg = new Image();
     planeImg.src = "/plane.png";
 
@@ -396,59 +355,33 @@ export default function HighFlyerGame() {
           ctx.drawImage(planeImg, 60, h - 90, 60, 60);
         }
       }
-
       animationFrameId.current = requestAnimationFrame(draw);
     };
-
     animationFrameId.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animationFrameId.current);
   }, [isAuthenticated]);
 
   // ==========================================
-  // ৬. হ্যান্ডলারস (API Calls)
+  // ৭. হ্যান্ডলারস (Socket.io)
   // ==========================================
-  const cashout = async (pId, mult) => {
+  const handleCashout = (pId, mult) => {
     const p = panelsRef.current[pId];
     if (!p.hasBet || p.cashedOut || phaseRef.current !== "flying") return;
 
-    const prevBalance = userBalance;
-    setUserBalance((prev) =>
-      Number((Number(prev) + Number(p.bet) * Number(mult)).toFixed(2)),
-    );
+    // 🆕 সার্ভারে পাঠানোর জন্য টার্গেট মাল্টিপ্লায়ার নির্ধারণ
+    let targetMultiplier = mult;
+    if (p.autoCash && p.autoVal) {
+      targetMultiplier = Number(p.autoVal);
+    }
 
     setPanels((prev) => ({
       ...prev,
       [pId]: { ...prev[pId], cashedOut: true, hasBet: false },
     }));
 
-    try {
-      const res = await fetch("/api/crash-game/cashout", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ betAmount: Number(p.bet), multiplier: mult }),
-      });
-
-      if (!res.ok) {
-        setUserBalance(prevBalance);
-        setPanels((prev) => ({
-          ...prev,
-          [pId]: { ...prev[pId], cashedOut: false, hasBet: true },
-        }));
-        alert("ক্যাশআউট ব্যর্থ হয়েছে!");
-      } else {
-        const data = await res.json();
-        if (data.newBalance !== undefined) {
-          setUserBalance(Number(data.newBalance).toFixed(2));
-        }
-      }
-    } catch (err) {
-      console.error("Cashout sync failed", err);
-      setUserBalance(prevBalance);
-      setPanels((prev) => ({
-        ...prev,
-        [pId]: { ...prev[pId], cashedOut: false, hasBet: true },
-      }));
+    if (socket) {
+      // 🆕 সার্ভারে টার্গেট মাল্টিপ্লায়ার পাঠানো হলো
+      socket.emit("cashout", { targetMultiplier: targetMultiplier });
     }
   };
 
@@ -456,51 +389,31 @@ export default function HighFlyerGame() {
     const p = panels[pId];
 
     if (currentPhase === "FLYING" && p.hasBet && !p.cashedOut) {
-      cashout(pId, multiplierRef.current);
+      handleCashout(pId, multiplierRef.current);
       return;
     }
 
     if (!p.hasBet) {
       const amount = Number(p.bet);
-      if (isNaN(amount) || amount <= 0) return alert("সঠিক পরিমাণ লিখুন!");
-      if (userBalance < amount) return alert("পর্যাপ্ত ব্যালেন্স নেই!");
-
-      const prevBalance = userBalance;
-      setUserBalance((prev) => Number((Number(prev) - amount).toFixed(2)));
+      // 🆕 সার্ভারে চেক হবে, তাই এখানে alert বাদ দেওয়া হলো
+      if (isNaN(amount) || amount <= 0) {
+        setToast({ type: "error", message: "সঠিক পরিমাণ লিখুন!" });
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      if (userBalance < amount) {
+        setToast({ type: "error", message: "পর্যাপ্ত ব্যালেন্স নেই!" });
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
 
       setPanels((prev) => ({
         ...prev,
         [pId]: { ...prev[pId], hasBet: true, cashedOut: false },
       }));
 
-      try {
-        const res = await fetch("/api/crash-game/bet", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ betAmount: amount }),
-        });
-
-        if (!res.ok) {
-          setUserBalance(prevBalance);
-          setPanels((prev) => ({
-            ...prev,
-            [pId]: { ...prev[pId], hasBet: false, cashedOut: false },
-          }));
-          alert("বেট ধরতে ব্যর্থ হয়েছে!");
-        } else {
-          const data = await res.json();
-          if (data.newBalance !== undefined) {
-            setUserBalance(Number(data.newBalance).toFixed(2));
-          }
-        }
-      } catch (err) {
-        console.error("Bet sync failed", err);
-        setUserBalance(prevBalance);
-        setPanels((prev) => ({
-          ...prev,
-          [pId]: { ...prev[pId], hasBet: false, cashedOut: false },
-        }));
+      if (socket) {
+        socket.emit("placeBet", { amount: amount });
       }
     }
   };
@@ -515,9 +428,8 @@ export default function HighFlyerGame() {
 
   const addBetAmount = (pId, amount) => {
     setPanels((prev) => {
-      const currentBet = Number(prev[pId].bet) || 0;
-      const newVal = Math.min(500000, currentBet + amount);
-      return { ...prev, [pId]: { ...prev[pId], bet: newVal } };
+      // 🆕 সরাসরি ভ্যালু সেট হবে, আগের সাথে যোগ হবে না
+      return { ...prev, [pId]: { ...prev[pId], bet: amount } };
     });
   };
 
@@ -530,38 +442,61 @@ export default function HighFlyerGame() {
 
   if (loading || !isAuthenticated) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#0a0c10] text-white">
-        <div className="text-xl font-bold animate-pulse">
-          অথেনটিকেশন চেক করা হচ্ছে...
+      <div className="h-screen flex flex-col items-center justify-center bg-[#090d16] text-white">
+        {/* 🆕 সবুজ রঙের ঘুরন্ত রিং */}
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+
+        {/* 🆕 নিচের লেখা */}
+        <div className="text-sm font-medium text-gray-300 tracking-wider animate-pulse">
+          যাচাই করা হচ্ছে...
         </div>
       </div>
     );
   }
 
   // ==========================================
-  // RENDER UI
+  // RENDER UI (আপনার আগের UI হুবহু একই)
   // ==========================================
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#0a0c10] text-gray-200 font-sans select-none">
-      {/* HEADER */}
+      {/* 🆕 সুন্দর কাস্টম টোস্ট নোটিফিকেশন (উপরে মাঝখানে) */}
+      {toast && (
+        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 z-[100] transition-all duration-300">
+          <div
+            className={`${
+              toast.type === "success"
+                ? "bg-emerald-900/90 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                : "bg-red-900/90 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+            } border text-white px-6 py-3 rounded-xl flex items-center space-x-3 backdrop-blur-md`}
+          >
+            <span className="text-xl">
+              {toast.type === "success" ? "✅" : "⚠️"}
+            </span>
+            <span className="font-medium text-sm">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 text-gray-300 hover:text-white transition"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="h-12 bg-[#12151c] border-b border-gray-800/60 px-3 flex items-center justify-between z-20 shrink-0">
         <div className="flex items-center space-x-3">
           <div className="bg-gradient-to-r from-orange-500 to-amber-600 text-black font-extrabold px-2 py-0.5 rounded text-xs tracking-wider uppercase flex items-center">
             <span className="mr-1">✈</span> HIGH FLYER
           </div>
-
           <div className="h-4 w-[1px] bg-gray-700/50"></div>
           <div className="text-[11px] text-gray-400 font-mono flex items-center space-x-1">
             <span>Round:</span>
             <span className="text-amber-400 font-bold">{roundId}</span>
           </div>
-          <div className="h-4 w-[1px] bg-gray-700/50"></div>
         </div>
       </header>
 
-      {/* MAIN CONTAINER */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative">
-        {/* LEFT SIDEBAR */}
         <aside className="w-full md:w-72 bg-[#12151c] border-r border-gray-800/60 flex flex-col shrink-0 z-10 h-48 md:h-auto">
           <div className="grid grid-cols-4 bg-[#0a0c10] p-1 gap-1 text-[11px] font-semibold text-gray-400 border-b border-gray-800/60">
             <button
@@ -581,14 +516,6 @@ export default function HighFlyerGame() {
           {sidebarTab === "bets" && (
             <>
               <div className="p-2.5 bg-[#171b26] border-b border-gray-800/60 flex flex-col gap-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-gray-400 font-medium">
-                    Previous Round
-                  </span>
-                  <button className="text-gray-400 hover:text-amber-400">
-                    <i className="fa-solid fa-rotate"></i>
-                  </button>
-                </div>
                 <div className="flex justify-between items-center text-[11px] pt-1">
                   <div className="text-gray-400">
                     Total bets:{" "}
@@ -604,13 +531,11 @@ export default function HighFlyerGame() {
                   </div>
                 </div>
               </div>
-
               <div className="grid grid-cols-3 px-3 py-1.5 text-[10px] font-medium text-gray-400 border-b border-gray-800/40 bg-[#12151c]">
                 <div>User</div>
                 <div className="text-right">Bet ৳</div>
                 <div className="text-right">Cashed ৳</div>
               </div>
-
               <div className="flex-1 overflow-y-auto divide-y divide-gray-800/30 text-[11px]">
                 {liveBets.length > 0 ? (
                   liveBets.map((item, i) => (
@@ -619,10 +544,16 @@ export default function HighFlyerGame() {
                       className="grid grid-cols-3 px-3 py-2 items-center hover:bg-white/5 transition"
                     >
                       <div className="truncate text-gray-300 font-medium">
-                        {item.user}
+                        {item.user
+                          ? item.user
+                          : item.phone
+                            ? item.phone.slice(0, 3) +
+                              "****" +
+                              item.phone.slice(-3)
+                            : ""}
                       </div>
                       <div className="text-right font-mono text-gray-200">
-                        {Number(item.bet).toFixed(2)}
+                        {Number(item.amount || item.bet).toFixed(2)}
                       </div>
                       <div className="text-right">
                         {item.cashedOutAt ? (
@@ -631,7 +562,10 @@ export default function HighFlyerGame() {
                               {Number(item.cashedOutAt).toFixed(2)}x
                             </span>
                             <span className="text-[9px] text-emerald-500/70 font-mono">
-                              ৳{Number(item.payout).toFixed(2)}
+                              ৳
+                              {Number(item.amount * item.cashedOutAt).toFixed(
+                                2,
+                              )}
                             </span>
                           </div>
                         ) : (
@@ -655,7 +589,6 @@ export default function HighFlyerGame() {
                 <div>Round / Bet</div>
                 <div className="text-right">Result</div>
               </div>
-
               <div className="flex-1 overflow-y-auto divide-y divide-gray-800/30 text-[11px]">
                 {userHistory.length > 0 ? (
                   userHistory.map((item, i) => (
@@ -673,7 +606,6 @@ export default function HighFlyerGame() {
                           {item.isWin ? "WIN" : "LOSS"}
                         </span>
                       </div>
-
                       <div className="flex justify-between items-center">
                         <div className="text-gray-300">
                           বেট:{" "}
@@ -711,14 +643,12 @@ export default function HighFlyerGame() {
           )}
         </aside>
 
-        {/* MAIN GAME AREA */}
         <main className="flex-1 flex flex-col min-w-0 bg-[#0c0e14] relative overflow-hidden">
           <div className="flex-1 relative min-h-[250px] flex items-center justify-center bg-[#0e1118]">
             <canvas
               ref={canvasRef}
               className="absolute inset-0 w-full h-full block"
             ></canvas>
-
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 px-2">
               {currentPhase === "WAITING" && (
                 <div className="flex flex-col items-center">
@@ -757,7 +687,6 @@ export default function HighFlyerGame() {
                 </div>
               )}
             </div>
-
             {lastResult && lastResult.type === "win" && (
               <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60 backdrop-blur-sm p-4">
                 <div className="p-5 sm:p-8 rounded-3xl border-2 bg-emerald-950/90 border-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.6)] text-center animate-bounce w-full max-w-sm">
@@ -798,11 +727,7 @@ export default function HighFlyerGame() {
                         >
                           -
                         </button>
-
                         <div className="text-center flex-1">
-                          <div className="text-[9px] text-gray-400 uppercase font-semibold">
-                            {/* Bet ৳ */}
-                          </div>
                           <input
                             type="number"
                             value={p.bet}
@@ -819,7 +744,6 @@ export default function HighFlyerGame() {
                             className="w-full bg-transparent text-center font-mono font-bold text-white text-sm focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                         </div>
-
                         <button
                           onClick={() => adjustBet(pId, 1)}
                           className="w-7 h-7 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold flex items-center justify-center"
@@ -827,20 +751,10 @@ export default function HighFlyerGame() {
                           +
                         </button>
                       </div>
-
                       <div className="flex-1 h-full min-h-[48px]">
                         <button
                           onClick={() => handleBetClick(pId)}
-                          className={`w-full h-full rounded-lg font-black text-xs sm:text-sm uppercase tracking-wider flex flex-col items-center justify-center transition
-                            ${
-                              currentPhase === "FLYING" &&
-                              p.hasBet &&
-                              !p.cashedOut
-                                ? "bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.5)]"
-                                : p.hasBet
-                                  ? "bg-red-700 text-white"
-                                  : "bg-gradient-to-r from-emerald-500 to-green-600 text-black"
-                            }`}
+                          className={`w-full h-full rounded-lg font-black text-xs sm:text-sm uppercase tracking-wider flex flex-col items-center justify-center transition ${currentPhase === "FLYING" && p.hasBet && !p.cashedOut ? "bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.5)]" : p.hasBet ? "bg-red-700 text-white" : "bg-gradient-to-r from-emerald-500 to-green-600 text-black"}`}
                         >
                           {currentPhase === "FLYING" &&
                           p.hasBet &&
@@ -860,7 +774,6 @@ export default function HighFlyerGame() {
                         </button>
                       </div>
                     </div>
-
                     <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-2">
                       {[10, 30, 50, 100, 500, 1000].map((amt) => (
                         <button
@@ -872,7 +785,6 @@ export default function HighFlyerGame() {
                         </button>
                       ))}
                     </div>
-
                     <div className="flex flex-wrap items-center justify-between text-xs pt-1 border-t border-gray-800/60 gap-y-1">
                       <div className="flex items-center space-x-2 text-gray-400">
                         <button className="hover:text-gray-200">
@@ -895,7 +807,6 @@ export default function HighFlyerGame() {
                           />
                           <div className="w-7 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
                         </label>
-
                         <div className="relative">
                           <input
                             type="number"
@@ -929,16 +840,7 @@ export default function HighFlyerGame() {
               {multiplierHistory.slice(0, 20).map((val, idx) => (
                 <span
                   key={idx}
-                  className={`px-2 py-0.5 text-[10px] font-mono font-semibold rounded border shrink-0 cursor-pointer hover:scale-105 transition
-                  ${
-                    val >= 100
-                      ? "bg-pink-900/60 text-pink-300 border-pink-500/50"
-                      : val >= 10
-                        ? "bg-purple-900/50 text-purple-300 border-purple-500/40"
-                        : val >= 2
-                          ? "bg-indigo-900/40 text-indigo-300 border-indigo-500/30"
-                          : "bg-blue-900/40 text-cyan-400 border-blue-500/30"
-                  }`}
+                  className={`px-2 py-0.5 text-[10px] font-mono font-semibold rounded border shrink-0 cursor-pointer hover:scale-105 transition ${val >= 100 ? "bg-pink-900/60 text-pink-300 border-pink-500/50" : val >= 10 ? "bg-purple-900/50 text-purple-300 border-purple-500/40" : val >= 2 ? "bg-indigo-900/40 text-indigo-300 border-indigo-500/30" : "bg-blue-900/40 text-cyan-400 border-blue-500/30"}`}
                 >
                   {Number(val).toFixed(2)}x
                 </span>
@@ -974,4 +876,3 @@ export default function HighFlyerGame() {
     </div>
   );
 }
-////////////////////////////////////////////

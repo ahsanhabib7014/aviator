@@ -73,7 +73,8 @@ export default function WalletPage() {
             উপলব্ধ মূল ব্যালেন্স
           </p>
           <h1 className="text-base md:text-lg font-bold text-amber-400 font-mono mt-1 truncate">
-            ৳{user.balance || 0}
+            {/* ৳{user.balance || 0} */}
+            ৳{(user.balance || 0).toFixed(2)}
           </h1>
           <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-col gap-1.5 text-xs md:text-sm text-slate-400 font-mono">
             <span className="truncate">

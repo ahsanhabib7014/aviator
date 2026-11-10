@@ -1,5 +1,5 @@
 import "./globals.css";
-
+import { SocketProvider } from "./SocketProvider";
 
 export const metadata = {
   title: "mitupay live",
@@ -19,7 +19,8 @@ export default function RootLayout({ children }) {
       <body className="bg-[#090d16] text-slate-100 min-h-screen font-sans">
         {/* ফুল স্ক্রিন বা রেস্পন্সিভ ভিউর জন্য max-w-md সরিয়ে w-full করা হয়েছে */}
         <div className="w-full min-h-screen p-3 md:p-6">
-          <main>{children}</main>
+           <SocketProvider><main>{children}</main></SocketProvider>
+          
         </div>
       </body>
     </html>
