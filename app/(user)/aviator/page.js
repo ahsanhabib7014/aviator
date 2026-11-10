@@ -121,7 +121,7 @@ export default function HighFlyerGame() {
   }, [checkAuth]);
 
   // ==========================================
-  // ২. Socket.io থেকে আসা ডাটা আপডেট (সার্ভার টাইম সিঙ্ক)
+  // ২. Socket.io থেকে আসা ডাটা আপডেট (শুধু সার্ভারের ডাটা)
   // ==========================================
   useEffect(() => {
     if (!gameState) return;
@@ -134,18 +134,12 @@ export default function HighFlyerGame() {
     if (gameState.roundId) setRoundId(gameState.roundId);
     if (gameState.crashAt) crashMultiplierRef.current = gameState.crashAt;
 
-    // 🆕 সার্ভার টাইম সিঙ্ক (VPS ল্যাটেন্সি ঠিক করার জন্য)
-    if (gameState.serverTime) {
-      // সার্ভার এবং লোকাল টাইমের পার্থক্য বের করা
-      clockOffsetRef.current = gameState.serverTime - Date.now();
-    }
-
-    // 🆕 সার্ভারের startTime এবং nextRoundTime সেভ করা
+    // 🆕 সার্ভারের টাইম সেভ করা
     if (gameState.startTime) serverStartTimeRef.current = gameState.startTime;
     if (gameState.nextRoundTime)
       serverNextRoundTimeRef.current = gameState.nextRoundTime;
 
-    // 🆕 সার্ভারের মাল্টিপ্লায়ার রেফে সেভ করা
+    // 🆕 সার্ভারের মাল্টিপ্লায়ার সরাসরি সেট করা
     if (gameState.status === "flying") {
       multiplierRef.current = gameState.multiplier;
       setCurrentMultiplier(gameState.multiplier);
@@ -161,7 +155,6 @@ export default function HighFlyerGame() {
       setTotalBetsAmount(gameState.totalBetsAmount || 0);
     }
 
-    // 🆕 শুধুমাত্র নতুন রাউন্ড শুরু হলেই প্যানেল রিসেট হবে
     if (gameState.roundId && gameState.roundId !== roundIdRef.current) {
       roundIdRef.current = gameState.roundId;
       setPanels((prev) => ({
@@ -170,6 +163,7 @@ export default function HighFlyerGame() {
       }));
     }
   }, [gameState]);
+
   // ==========================================
   // ৩. Socket ইভেন্ট লিসেনার
   // ==========================================
@@ -215,9 +209,8 @@ export default function HighFlyerGame() {
       socket.off("cashoutError");
     };
   }, [socket]);
-
   // ==========================================
-  // ৪. লোকাল গেম লুপ (সার্ভারের ডাটা থেকে)
+  // ৪. লোকাল গেম লুপ (শুধু সার্ভারের মাল্টিপ্লায়ারের ওপর নির্ভরশীল)
   // ==========================================
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -229,6 +222,7 @@ export default function HighFlyerGame() {
       const now = Date.now();
 
       if (phaseRef.current === "waiting") {
+        // 🆕 সার্ভারের nextRoundTime থেকে কাউন্টডাউন
         const diff = serverNextRoundTimeRef.current - now;
         const secs = Math.ceil(diff / 1000);
         if (secs !== lastSec && secs >= 0) {
@@ -236,9 +230,10 @@ export default function HighFlyerGame() {
           setCountdownTimer(secs);
         }
       } else if (phaseRef.current === "flying") {
-        // 🆕 অটো ক্যাশআউট চেক (সার্ভারের মাল্টিপ্লায়ার দিয়ে)
+        // 🆕 কোনো লোকাল ক্যালকুলেশন নেই, শুধু সার্ভারের মাল্টিপ্লায়ার দেখানো হবে
         const currentServerMultiplier = multiplierRef.current;
 
+        // 🆕 অটো ক্যাশআউট চেক (সার্ভারের মাল্টিপ্লায়ার দিয়ে)
         if (currentServerMultiplier < crashMultiplierRef.current) {
           [1, 2].forEach((pId) => {
             const p = panelsRef.current[pId];
