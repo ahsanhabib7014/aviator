@@ -798,7 +798,7 @@ export default function HighFlyerGame() {
                           <div className="w-7 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
                         </label>
                         <div className="relative">
-                          <input
+                          {/* <input
                             type="number"
                             value={p.autoVal}
                             onChange={(e) => {
@@ -808,6 +808,27 @@ export default function HighFlyerGame() {
                                 [pId]: {
                                   ...prev[pId],
                                   autoVal: isNaN(val) ? "" : val,
+                                },
+                              }));
+                            }}
+                            className="w-14 sm:w-16 bg-[#0f1118] border border-gray-700 rounded px-1.5 sm:px-2 py-1 text-right font-mono text-[11px] sm:text-xs text-white focus:outline-none"
+                          /> */}
+                          <input
+                            type="number"
+                            min="1.01"
+                            step="0.01"
+                            value={p.autoVal}
+                            onChange={(e) => {
+                              let val = parseFloat(e.target.value);
+                              // 🆕 যদি ভ্যালু 1.01 এর নিচে বা মাইনাস হয়, তবে 1.01 সেট হবে
+                              if (isNaN(val) || val < 1.01) {
+                                val = 1.01;
+                              }
+                              setPanels((prev) => ({
+                                ...prev,
+                                [pId]: {
+                                  ...prev[pId],
+                                  autoVal: val,
                                 },
                               }));
                             }}
