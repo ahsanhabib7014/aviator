@@ -370,8 +370,11 @@ export default function HighFlyerGame() {
     }));
 
     if (socket) {
-      // 🆕 সার্ভারে টার্গেট মাল্টিপ্লায়ার পাঠানো হলো
-      socket.emit("cashout", { targetMultiplier: targetMultiplier });
+      // 🆕 সার্ভারে টার্গেট মাল্টিপ্লায়ার এবং স্লট পাঠানো হলো
+      socket.emit("cashout", {
+        targetMultiplier: targetMultiplier,
+        slot: pId, // 🆕 স্লট পাঠান
+      });
     }
   };
 
@@ -403,7 +406,7 @@ export default function HighFlyerGame() {
       }));
 
       if (socket) {
-        socket.emit("placeBet", { amount: amount });
+        socket.emit("placeBet", { amount: amount, slot: pId }); // 🆕 slot: pId
       }
     }
   };
@@ -448,7 +451,7 @@ export default function HighFlyerGame() {
   // RENDER UI (আপনার আগের UI হুবহু একই)
   // ==========================================
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#0a0c10] text-gray-200 font-sans select-none">
+    <div className="min-h-screen flex flex-col bg-[#0a0c10] text-gray-200 font-sans select-none pb-20 md:pb-0">
       {/* 🆕 সুন্দর কাস্টম টোস্ট নোটিফিকেশন (উপরে মাঝখানে) */}
       {toast && (
         <div className="fixed top-10 left-1/2 transform -translate-x-1/2 z-[100] transition-all duration-300">
@@ -580,7 +583,7 @@ export default function HighFlyerGame() {
                 <div className="text-right">Result</div>
               </div>
               <div className="flex-1 overflow-y-auto divide-y divide-gray-800/30 text-[11px]">
-                {userHistory.length > 0 ? (
+                {/* {userHistory.length > 0 ? (
                   userHistory.map((item, i) => (
                     <div
                       key={i}
@@ -627,13 +630,67 @@ export default function HighFlyerGame() {
                   <div className="text-center py-4 text-gray-500">
                     কোনো হিস্ট্রি নেই
                   </div>
+                )} */}
+                {userHistory.length > 0 ? (
+                  userHistory.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex flex-col px-3 py-2 hover:bg-white/5 transition gap-1 border-b border-gray-800/30"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-[10px] flex items-center gap-2 font-mono">
+                          {item.roundId}
+                          {/* 🆕 স্লট নাম্বার দেখানোর ব্যাজ */}
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${item.slot === 1 ? "bg-blue-900/50 text-blue-300" : "bg-purple-900/50 text-purple-300"}`}
+                          >
+                            Slot {item.slot || 1}
+                          </span>
+                        </span>
+                        <span
+                          className={`font-bold text-[10px] px-1.5 py-0.5 rounded ${item.isWin ? "bg-emerald-900/50 text-emerald-400" : "bg-red-900/50 text-red-400"}`}
+                        >
+                          {item.isWin ? "WIN" : "LOSS"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="text-gray-300 text-[11px]">
+                          বেট:{" "}
+                          <span className="font-mono text-white">
+                            ৳{Number(item.betAmount).toFixed(2)}
+                          </span>
+                        </div>
+                        {item.isWin ? (
+                          <div className="text-right flex items-center gap-2">
+                            <span className="text-amber-400 font-mono text-[11px]">
+                              {Number(item.multiplier).toFixed(2)}x
+                            </span>
+                            <span className="text-emerald-400 font-bold font-mono text-[11px]">
+                              ৳{Number(item.payout).toFixed(2)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-red-400 font-bold font-mono text-[11px]">
+                            ৳
+                            {Number(item.lossAmount || item.betAmount).toFixed(
+                              2,
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    কোনো হিস্ট্রি নেই
+                  </div>
                 )}
               </div>
             </>
           )}
         </aside>
 
-        <main className="flex-1 flex flex-col min-w-0 bg-[#0c0e14] relative overflow-hidden">
+        <main className="flex-1 flex flex-col min-w-0 bg-[#0c0e14] relative overflow-y-auto overflow-x-hidden">
           <div className="flex-1 relative min-h-[250px] flex items-center justify-center bg-[#0e1118]">
             <canvas
               ref={canvasRef}

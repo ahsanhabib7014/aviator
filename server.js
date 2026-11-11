@@ -525,11 +525,14 @@ app.prepare().then(() => {
           });
 
         const amount = Number(data.amount);
+        const slot = Number(data.slot) || 1; // 🆕 স্লট রিসিভ
+
         if (amount <= 0)
-          return socket.emit("betError", { message: "সঠিক পরিমাণ দিন" });
+          return socket.emit("betError", { message: "সঠিক পরিমাণ দিন", slot });
         if (user.balance < amount)
           return socket.emit("betError", {
             message: "পর্যাপ্ত ব্যালেন্স নেই!",
+            slot,
           });
 
         let currentRound = await CrashRound.findOne({
@@ -544,30 +547,33 @@ app.prepare().then(() => {
           });
         }
 
-        // Atomic Update: ডাবল বেট প্রতিরোধ
-        const updatedRound = await CrashRound.findOneAndUpdate(
-          {
-            periodNumber: gameState.roundId,
-            "bets.userId": { $ne: user._id },
-          },
+        // 🆕 ডাটাবেসে ওই নির্দিষ্ট স্লটে বেট আছে কিনা চেক
+        const existingBet = currentRound.bets.find(
+          (b) => b.userId.toString() === user._id.toString() && b.slot === slot
+        );
+        if (existingBet) {
+          return socket.emit("betError", {
+            message: `স্লট ${slot} এ ইতিমধ্যে বেট দেওয়া হয়েছে!`,
+            slot,
+          });
+        }
+
+        // 🆕 স্লট সহ ডাটাবেসে পুশ
+        await CrashRound.findOneAndUpdate(
+          { periodNumber: gameState.roundId },
           {
             $push: {
               bets: {
                 userId: user._id,
                 phone: user.phone || "01700000000",
                 amount: amount,
+                slot: slot, // 🆕
                 cashedOutAt: null,
               },
             },
           },
-          { new: true },
+          { new: true }
         );
-
-        if (!updatedRound) {
-          return socket.emit("betError", {
-            message: "আপনি ইতিমধ্যে এই রাউন্ডে বেট ধরেছেন!",
-          });
-        }
 
         const updatedUser = await User.findOneAndUpdate(
           { _id: user._id },
@@ -579,13 +585,15 @@ app.prepare().then(() => {
           userId: user._id.toString(),
           phone: user.phone || "01700000000",
           amount: amount,
+          slot: slot, // 🆕
           cashedOutAt: null,
         });
         gameState.totalBetsAmount += amount;
 
         socket.emit("betSuccess", {
-          message: `৳${amount} বেট সফল হয়েছে!`,
+          message: `৳${amount} বেট সফল হয়েছে! (স্লট ${slot})`,
           newBalance: updatedUser.balance,
+          slot, // 🆕
         });
         io.emit("gameState", {
           ...gameState,
@@ -611,14 +619,22 @@ app.prepare().then(() => {
         if (!user)
           return socket.emit("cashoutError", {
             message: "ইউজার পাওয়া যায়নি",
+            slot: data.slot,
           });
 
+        const slot = Number(data.slot) || 1; // 🆕 কোন স্লটের ক্যাশআউট
+
+        // 🆕 নির্দিষ্ট স্লটের একটিভ বেট খুঁজুন
         const bet = gameState.bets.find(
-          (b) => b.userId === user._id.toString() && b.cashedOutAt === null,
+          (b) =>
+            b.userId === user._id.toString() &&
+            b.cashedOutAt === null &&
+            b.slot === slot
         );
         if (!bet)
           return socket.emit("cashoutError", {
-            message: "ক্যাশআউট করার মত কোনো বেট নেই!",
+            message: `স্লট ${slot} এ ক্যাশআউট করার মত কোনো বেট নেই!`,
+            slot,
           });
 
         const serverMultiplier = gameState.multiplier;
@@ -633,15 +649,11 @@ app.prepare().then(() => {
 
         const winAmount = Number((bet.amount * finalMultiplier).toFixed(2));
 
-        await CrashRound.findOneAndUpdate(
-          {
-            periodNumber: gameState.roundId,
-            "bets.userId": user._id,
-            "bets.cashedOutAt": null,
-          },
-          {
-            $set: { "bets.$.cashedOutAt": finalMultiplier },
-          },
+        // 🆕 arrayFilters ব্যবহার করে নির্দিষ্ট স্লটের বেট আপডেট করুন
+        await CrashRound.updateOne(
+          { periodNumber: gameState.roundId },
+          { $set: { "bets.$[elem].cashedOutAt": finalMultiplier } },
+          { arrayFilters: [{ "elem.userId": user._id, "elem.slot": slot }] }
         );
 
         const updatedUser = await User.findOneAndUpdate(
@@ -653,10 +665,11 @@ app.prepare().then(() => {
         bet.cashedOutAt = finalMultiplier;
 
         socket.emit("cashoutSuccess", {
-          message: `৳${winAmount} ক্যাশআউট সফল!`,
+          message: `৳${winAmount} ক্যাশআউট সফল! (স্লট ${slot})`,
           newBalance: updatedUser.balance,
           multiplier: finalMultiplier,
           winAmount,
+          slot, // 🆕
         });
         io.emit("gameState", {
           ...gameState,
