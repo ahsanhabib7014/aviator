@@ -549,7 +549,7 @@ app.prepare().then(() => {
 
         // 🆕 ডাটাবেসে ওই নির্দিষ্ট স্লটে বেট আছে কিনা চেক
         const existingBet = currentRound.bets.find(
-          (b) => b.userId.toString() === user._id.toString() && b.slot === slot
+          (b) => b.userId.toString() === user._id.toString() && b.slot === slot,
         );
         if (existingBet) {
           return socket.emit("betError", {
@@ -572,7 +572,7 @@ app.prepare().then(() => {
               },
             },
           },
-          { new: true }
+          { new: true },
         );
 
         const updatedUser = await User.findOneAndUpdate(
@@ -629,7 +629,7 @@ app.prepare().then(() => {
           (b) =>
             b.userId === user._id.toString() &&
             b.cashedOutAt === null &&
-            b.slot === slot
+            b.slot === slot,
         );
         if (!bet)
           return socket.emit("cashoutError", {
@@ -650,12 +650,29 @@ app.prepare().then(() => {
         const winAmount = Number((bet.amount * finalMultiplier).toFixed(2));
 
         // 🆕 arrayFilters ব্যবহার করে নির্দিষ্ট স্লটের বেট আপডেট করুন
-        await CrashRound.updateOne(
+        const updateResult = await CrashRound.updateOne(
           { periodNumber: gameState.roundId },
           { $set: { "bets.$[elem].cashedOutAt": finalMultiplier } },
-          { arrayFilters: [{ "elem.userId": user._id, "elem.slot": slot }] }
+          {
+            arrayFilters: [
+              {
+                "elem.userId": user._id,
+                "elem.slot": slot,
+                "elem.cashedOutAt": null,
+              },
+            ],
+          },
         );
 
+        // 🆕 যদি ডাটাবেসে কোনো পরিবর্তন না হয়, তার মানে বেটটি আগেই ক্যাশআউট হয়ে গেছে
+        if (updateResult.modifiedCount === 0) {
+          return socket.emit("cashoutError", {
+            message: `স্লট ${slot} এ ইতিমধ্যে ক্যাশআউট করা হয়েছে!`,
+            slot,
+          });
+        }
+
+        // 🆕 ডাটাবেসে সফলভাবে আপডেট হলে তবেই টাকা যোগ করুন
         const updatedUser = await User.findOneAndUpdate(
           { _id: user._id },
           { $inc: { balance: winAmount } },
