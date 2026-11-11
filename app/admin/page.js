@@ -667,11 +667,12 @@ export default function AdminHomePage() {
         >
           <i className="fa-solid fa-dice-six text-sm"></i> ৬-বাটন গেম কন্ট্রোল
         </button>
-                <button
+        <button
           onClick={() => router.push("/admin/crash-game")}
           className="px-4 py-2.5 rounded-xl text-xs font-bold border border-orange-500/20 bg-orange-500/5 text-orange-400 hover:bg-orange-500/10 flex items-center gap-2 transition-all cursor-pointer"
         >
-          <i className="fa-solid fa-plane-departure text-sm"></i> এভিয়েটর গেম কন্ট্রোল
+          <i className="fa-solid fa-plane-departure text-sm"></i> এভিয়েটর গেম
+          কন্ট্রোল
         </button>
         <button
           onClick={() => router.push("/admin/user-bet-balance-check")}
@@ -679,6 +680,18 @@ export default function AdminHomePage() {
         >
           <i className="fa-solid fa-user-check text-sm"></i> ইউজার বেট চেক
         </button>
+        <button
+          onClick={() => router.push("/admin/notices")}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold border border-blue-500/20 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10 flex items-center gap-2 transition-all cursor-pointer"
+        >
+          <i className="fa-solid fa-bullhorn text-sm"></i> নোটিশ ম্যানেজমেন্ট
+        </button>
+        <button
+  onClick={() => router.push("/admin/contact-messages")}
+  className="px-4 py-2.5 rounded-xl text-xs font-bold border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 transition-all cursor-pointer"
+>
+  <i className="fa-solid fa-headset text-sm"></i> কন্টাক্ট ম্যানেজমেন্ট
+</button>
       </div>
       {/* এডিট মডাল */}
       {editingUser && (

@@ -44,7 +44,9 @@ export default function AdminPermissionsPage() {
     { key: "view_bonus_history", label: "বোনাস ইতিহাস" },
     { key: "LIVE_STATS", label: "লাইভ বেট স্ট্যাটস" },
     { key: "agent-requests", label: "ডলার রিকোয়েস্ট" },
-     { key: "live-aviator", label: "লাইভ স্ট্যাটাস" }, 
+    { key: "live-aviator", label: "লাইভ স্ট্যাটাস" },
+    { key: "manage_notices", label: "নোটিশ ম্যানেজমেন্ট" },
+    { key: "manage_contact-messages", label: "কন্টাক্ট ম্যানেজমেন্ট" },
   ];
 
   // ১. ইউজার সার্চ করার ফাংশন

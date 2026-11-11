@@ -99,7 +99,7 @@ export default function HomePage() {
             </div>
 
             <h1 className="text-xl md:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
-              রিয়েল-টাইম প্রেডিকশন{" "}
+              লাইভ অ্যাকশন{" "}
               <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
                 গেমে স্বাগতম!
               </span>
@@ -107,7 +107,7 @@ export default function HomePage() {
 
             <p className="text-xs md:text-sm lg:text-base text-slate-300 leading-relaxed max-w-2xl mx-auto">
               আমাদের প্ল্যাটফর্মে আপনি সঠিক অ্যানালাইসিস এবং বুদ্ধিমত্তা খাটিয়ে
-              প্রেডিকশন করতে পারেন। গেম খেলার পাশাপাশি নিজের ব্যালেন্স ও রুলস
+              লাইভ করতে পারেন। গেম খেলার পাশাপাশি নিজের ব্যালেন্স ও রুলস
               সম্পর্কে সর্বদা সচেতন থাকুন।
             </p>
 
@@ -117,7 +117,7 @@ export default function HomePage() {
                 className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm md:text-base px-6 md:px-8 py-3 md:py-4 rounded-2xl transition shadow-xl shadow-emerald-950/50 border border-emerald-500/30 active:scale-95 w-full md:w-auto justify-center"
               >
                 <i className="fa-solid fa-rocket"></i>
-                প্রেডিকশন রুমে প্রবেশ করুন
+                লাইভ রুমে প্রবেশ করুন
               </Link>
             </div>
           </div>
@@ -142,29 +142,27 @@ export default function HomePage() {
               <li className="flex gap-2.5">
                 <span className="text-amber-400 mt-0.5 flex-shrink-0">•</span>
                 <span>
-                  প্রতিটি পিরিয়ডের সময়সীমা ৩০ সেকেন্ড। টাইমার শেষ হওয়ার ৫
-                  সেকেন্ড আগে বেটিং বন্ধ হয়ে যায়।
+                  অ্যানালাইসিস করুন: পূর্ববর্তী রাউন্ডগুলোর ফলাফল লক্ষ্য করুন। প্যাটার্ন খুঁজে বের করার চেষ্টা করুন।
                 </span>
               </li>
               <li className="flex gap-2.5">
                 <span className="text-amber-400 mt-0.5 flex-shrink-0">•</span>
                 <span>
-                  <strong className="text-emerald-400 font-bold">BIG</strong>{" "}
-                  সিলেক্ট করলে ফলাফল ৫ থেকে ৯ এর মধ্যে হতে হবে।
+                  {/* <strong className="text-emerald-400 font-bold">BIG</strong>{" "} */}
+                  বাজেট মেইনটেইন করুন: একবারে সব বাজি ধরবেন না। ছোট ছোট বাজি দিয়ে খেলুন।
                 </span>
               </li>
               <li className="flex gap-2.5">
                 <span className="text-amber-400 mt-0.5 flex-shrink-0">•</span>
                 <span>
-                  <strong className="text-rose-400 font-bold">SMALL</strong>{" "}
-                  সিলেক্ট করলে ফলাফল ০ থেকে ৪ এর মধ্যে হতে হবে।
+                  {/* <strong className="text-rose-400 font-bold">SMALL</strong>{" "} */}
+                  রিস্ক ম্যানেজমেন্ট: আপনার মোট ব্যালেন্সের একটি নির্দিষ্ট অংশ (যেমন ৫-১০%) দিয়ে বাজি ধরুন।
                 </span>
               </li>
               <li className="flex gap-2.5">
                 <span className="text-amber-400 mt-0.5 flex-shrink-0">•</span>
                 <span>
-                  প্রতিটি রাউন্ড শেষে স্বয়ংক্রিয়ভাবে ফলাফল জেনারেট হয় এবং
-                  জয়ীদের ব্যালেন্স আপডেট করা হয়।
+                  আবেগ নিয়ন্ত্রণ করুন: পরপর কয়েকবার হেরে গেলে হতাশ হবেন না। শান্ত থেকে সিদ্ধান্ত নিন।
                 </span>
               </li>
             </ul>
@@ -226,7 +224,7 @@ export default function HomePage() {
             <div className="pt-1">
               <span className="inline-flex items-center gap-2 bg-slate-800 text-slate-300 text-xs md:text-sm px-4 md:px-5 py-2.5 md:py-3 rounded-xl border border-slate-700 font-medium hover:border-emerald-500/30 transition cursor-pointer">
                 <i className="fa-solid fa-envelope text-emerald-400"></i>
-                support@mitupay.com
+                support@mitupay.tech
               </span>
             </div>
           </div>

@@ -932,15 +932,17 @@ export default function HighFlyerGame() {
               </span>
               <span className="font-mono font-bold text-gray-300">
                 ৳{" "}
-                {// 🆕 hasBet অথবা cashedOut যেকোনো একটি true থাকলেই সেটি টোটাল বেটে থাকবে
-                (
-                  (panels[1]?.hasBet || panels[1]?.cashedOut
-                    ? Number(panels[1].bet)
-                    : 0) +
-                  (panels[2]?.hasBet || panels[2]?.cashedOut
-                    ? Number(panels[2].bet)
-                    : 0)
-                ).toFixed(2)}
+                {
+                  // 🆕 hasBet অথবা cashedOut যেকোনো একটি true থাকলেই সেটি টোটাল বেটে থাকবে
+                  (
+                    (panels[1]?.hasBet || panels[1]?.cashedOut
+                      ? Number(panels[1].bet)
+                      : 0) +
+                    (panels[2]?.hasBet || panels[2]?.cashedOut
+                      ? Number(panels[2].bet)
+                      : 0)
+                  ).toFixed(2)
+                }
               </span>
             </div>
           </div>

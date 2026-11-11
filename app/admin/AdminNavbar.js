@@ -75,11 +75,11 @@ export default function AdminNavbar() {
           label: "গেম কন্ট্রোল",
           icon: "fa-solid fa-dice-six",
         },
-            {
-      href: "/admin/crash-game", // 🆕 আপনার এভিয়েটর অ্যাডমিন পেজের সঠিক লিংকটি বসান (যেমন: /admin/aviator)
-      label: "এভিয়েটর কন্ট্রোল",
-      icon: "fa-solid fa-plane-departure", // 🆕 প্লেনের আইকন
-    },
+        {
+          href: "/admin/crash-game", // 🆕 আপনার এভিয়েটর অ্যাডমিন পেজের সঠিক লিংকটি বসান (যেমন: /admin/aviator)
+          label: "এভিয়েটর কন্ট্রোল",
+          icon: "fa-solid fa-plane-departure", // 🆕 প্লেনের আইকন
+        },
       ],
     },
     {
@@ -99,6 +99,16 @@ export default function AdminNavbar() {
           href: "/admin/audit-logs",
           label: "অডিট লগ দেখুন",
           icon: "fa-solid fa-clipboard-list",
+        },
+        {
+          href: "/admin/notices",
+          label: "নোটিশ ম্যানেজমেন্ট",
+          icon: "fa-solid fa-bullhorn",
+        },
+        {
+          href: "/admin/contact-messages",
+          label: "কন্টাক্ট ম্যানেজমেন্ট",
+          icon: "fa-solid fa-headset",
         },
       ],
     },

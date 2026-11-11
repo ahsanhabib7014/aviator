@@ -190,6 +190,7 @@ export default function AgentDashboard() {
           icon="🔄"
           color="hover:border-emerald-500/50"
         />
+
         <QuickLink
           href="/agent/deposits"
           title="ডিপোজিট দেখুন"
@@ -203,6 +204,13 @@ export default function AgentDashboard() {
           desc="আপনার সাথে সম্পর্কিত সব উইথড্র"
           icon="💸"
           color="hover:border-rose-500/50"
+        />
+        <QuickLink
+          href="/agent/contact"
+          title="যোগাযোগ করুন"
+          desc="সমস্যা বা জিজ্ঞাসায় সাপোর্ট টিমের সাথে যোগাযোগ করুন"
+          icon="📞"
+          color="hover:border-blue-500/50"
         />
       </div>
 
