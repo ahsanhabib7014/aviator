@@ -100,3 +100,107 @@
 //   return useContext(SocketContext);
 // }
 // ////////////////////////////////////////////
+"use client";
+
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
+
+const SocketContext = createContext({ socket: null, gameState: null });
+
+export function SocketProvider({ children }) {
+  const [socket, setSocket] = useState(null);
+  const [gameState, setGameState] = useState(null);
+  const pollingIntervalRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const stopFallbackPolling = () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+
+    const startFallbackPolling = () => {
+      if (pollingIntervalRef.current) return;
+
+      pollingIntervalRef.current = setInterval(async () => {
+        try {
+          const res = await fetch("/api/crash-game/state", {
+            credentials: "include",
+            cache: "no-store",
+          });
+
+          if (!res.ok) return;
+
+          const data = await res.json();
+          if (data?.status) {
+            setGameState({
+              ...data,
+              bets: data.bets || [],
+              totalBetsAmount: data.totalBetsAmount || 0,
+            });
+          }
+        } catch (error) {
+          console.error("Fallback polling error:", error);
+        }
+      }, 3000);
+    };
+
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || undefined;
+
+    const newSocket = io(socketUrl, {
+      path: "/socket.io",
+      transports: ["polling", "websocket"],
+      upgrade: true,
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
+    });
+
+    newSocket.on("gameState", (state) => {
+      setGameState(state);
+    });
+
+    newSocket.on("connect", () => {
+      console.log("✅ Socket Connected:", newSocket.id);
+      stopFallbackPolling();
+    });
+
+    newSocket.on("disconnect", (reason) => {
+      console.warn("❌ Socket Disconnected:", reason);
+      if (reason !== "io client disconnect") {
+        startFallbackPolling();
+      }
+    });
+
+    newSocket.on("connect_error", (error) => {
+      console.warn("⚠️ Socket Connect Error:", error.message);
+      startFallbackPolling();
+    });
+
+    if (mounted) setSocket(newSocket);
+
+    return () => {
+      mounted = false;
+      stopFallbackPolling();
+      newSocket.removeAllListeners();
+      newSocket.disconnect();
+      setSocket(null);
+    };
+  }, []);
+
+  return (
+    <SocketContext.Provider value={{ socket, gameState }}>
+      {children}
+    </SocketContext.Provider>
+  );
+}
+
+export function useSocket() {
+  return useContext(SocketContext);
+}
