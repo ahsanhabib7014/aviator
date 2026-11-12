@@ -689,13 +689,11 @@ export default function ContactMessages() {
     return () => socket.off("contactTicketUpdated", handleUpdate);
   }, [socket, isAuthorized]);
 
-  // রোল অনুযায়ী unread count বের করা
+  // রোল অনুযায়ী মোট message count বের করা
   useEffect(() => {
     const breakdown = { user: 0, agent: 0, "sub-admin": 0 };
 
     messages.forEach((msg) => {
-      if (!isUnreadMessage(msg)) return;
-
       const role = normalizeRole(
         msg.senderRole || msg.sender?.role || msg.role,
       );
