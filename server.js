@@ -1,3 +1,4 @@
+require("dotenv").config();
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
@@ -35,11 +36,10 @@ app.prepare().then(() => {
     },
   });
 
-  // 🆕 গেমের গ্লোবাল স্টেট (সবার জন্য একই থাকবে)
+  // 🆕 গেমের গ্লোবাল স্টেট
   let roundCounter = 1001;
   let gameState = null;
 
-  // 🆕 ডাটাবেস থেকে সর্বশেষ রাউন্ডের আইডি বের করার ফাংশন
   const initializeGameState = async () => {
     try {
       const lastRound = await CrashRound.findOne().sort({ createdAt: -1 });
@@ -54,7 +54,6 @@ app.prepare().then(() => {
       console.error("Error fetching last round:", err);
     }
 
-    // গেমের স্টেট শুরু করা
     gameState = {
       roundId: `CRASH-${roundCounter}`,
       status: "waiting",
@@ -67,7 +66,6 @@ app.prepare().then(() => {
     };
   };
 
-  // সার্ভার চালু হওয়ার সাথে সাথে ডাটাবেস থেকে রাউন্ড আইডি সেট করা
   initializeGameState();
 
   let history = [];
@@ -97,13 +95,11 @@ app.prepare().then(() => {
 
     const userToken = cookies["token"] || null;
 
-    // 🆕 যদি গেম স্টেট এখনো তৈরি না হয়, তবে অপেক্ষা করা
     if (!gameState) {
       socket.emit("betError", { message: "গেম লোড হচ্ছে, অপেক্ষা করুন..." });
       return;
     }
 
-    // 🆕 কানেক্ট হওয়ার সময় সার্ভারের বর্তমান সময়ও পাঠানো হলো
     socket.emit("gameState", {
       ...gameState,
       history,
@@ -127,7 +123,7 @@ app.prepare().then(() => {
           });
 
         const amount = Number(data.amount);
-        const slot = Number(data.slot) || 1; // 🆕 স্লট রিসিভ
+        const slot = Number(data.slot) || 1;
 
         if (amount <= 0)
           return socket.emit("betError", { message: "সঠিক পরিমাণ দিন", slot });
@@ -149,11 +145,9 @@ app.prepare().then(() => {
           });
         }
 
-        // 🆕 অ্যাটমিক আপডেট: শুধু তখনই বেট পুশ হবে যদি ওই স্লটে আগে বেট না থাকে
         const updatedRound = await CrashRound.findOneAndUpdate(
           {
             periodNumber: gameState.roundId,
-            // এই শর্তটি নিশ্চিত করবে যে এই ইউজার এই স্লটে আগে বেট ধরেনি
             bets: { $not: { $elemMatch: { userId: user._id, slot: slot } } },
           },
           {
@@ -170,21 +164,19 @@ app.prepare().then(() => {
           { new: true },
         );
 
-        // যদি রাউন্ড আপডেট না হয়, তার মানে ওই স্লটে আগেই বেট ধরা আছে
         if (!updatedRound) {
           return socket.emit("betError", {
-            message: `স্লট ${slot} এ ইতিমধ্যে বেট দেওয়া হয়েছে!`,
+            message: `স্লট ${slot} এ ইতিমধ্যে বেট দেওয়া হয়েছে!`,
             slot,
           });
         }
 
         const updatedUser = await User.findOneAndUpdate(
-          { _id: user._id, balance: { $gte: amount } }, // 🆕 ব্যালেন্স যথেষ্ট আছে কিনা চেক
+          { _id: user._id, balance: { $gte: amount } },
           { $inc: { balance: -amount, turnover: -amount } },
           { new: true },
         );
         if (!updatedUser) {
-          // 🆕 যদি ব্যালেন্স কম থাকে, তবে পুশ করা বেটটি রোলব্যাক করতে হবে
           await CrashRound.updateOne(
             { periodNumber: gameState.roundId },
             { $pull: { bets: { userId: user._id, slot: slot } } },
@@ -199,7 +191,7 @@ app.prepare().then(() => {
           userId: user._id.toString(),
           phone: user.phone || "01700000000",
           amount: amount,
-          slot: slot, // 🆕
+          slot: slot,
           cashedOutAt: null,
         });
         gameState.totalBetsAmount += amount;
@@ -207,7 +199,7 @@ app.prepare().then(() => {
         socket.emit("betSuccess", {
           message: `৳${amount} বেট সফল হয়েছে! (স্লট ${slot})`,
           newBalance: updatedUser.balance,
-          slot, // 🆕
+          slot,
         });
         io.emit("gameState", {
           ...gameState,
@@ -220,7 +212,7 @@ app.prepare().then(() => {
       }
     });
 
-    // 🆕 ক্লায়েন্ট থেকে ক্যাশআউট আসলে
+    // 🆕 ক্যাশআউট
     socket.on("cashout", async (data) => {
       try {
         if (gameState.status !== "flying") {
@@ -236,9 +228,8 @@ app.prepare().then(() => {
             slot: data.slot,
           });
 
-        const slot = Number(data.slot) || 1; // 🆕 কোন স্লটের ক্যাশআউট
+        const slot = Number(data.slot) || 1;
 
-        // 🆕 নির্দিষ্ট স্লটের একটিভ বেট খুঁজুন
         const bet = gameState.bets.find(
           (b) =>
             b.userId === user._id.toString() &&
@@ -263,7 +254,6 @@ app.prepare().then(() => {
 
         const winAmount = Number((bet.amount * finalMultiplier).toFixed(2));
 
-        // 🆕 arrayFilters ব্যবহার করে নির্দিষ্ট স্লটের বেট আপডেট করুন
         const updateResult = await CrashRound.updateOne(
           { periodNumber: gameState.roundId },
           { $set: { "bets.$[elem].cashedOutAt": finalMultiplier } },
@@ -278,7 +268,6 @@ app.prepare().then(() => {
           },
         );
 
-        // 🆕 যদি ডাটাবেসে কোনো পরিবর্তন না হয়, তার মানে বেটটি আগেই ক্যাশআউট হয়ে গেছে
         if (updateResult.modifiedCount === 0) {
           return socket.emit("cashoutError", {
             message: `স্লট ${slot} এ ইতিমধ্যে ক্যাশআউট করা হয়েছে!`,
@@ -286,11 +275,10 @@ app.prepare().then(() => {
           });
         }
 
-        // 🆕 ডাটাবেসে সফলভাবে আপডেট হলে তবেই টাকা যোগ করুন
         const updatedUser = await User.findOneAndUpdate(
           {
             _id: user._id,
-            balance: { $gte: 0 }, // 🆕 এই শর্তটি যোগ করা হলো
+            balance: { $gte: 0 },
           },
           { $inc: { balance: winAmount } },
           { new: true },
@@ -303,7 +291,7 @@ app.prepare().then(() => {
           newBalance: updatedUser.balance,
           multiplier: finalMultiplier,
           winAmount,
-          slot, // 🆕
+          slot,
         });
         io.emit("gameState", {
           ...gameState,
@@ -323,7 +311,7 @@ app.prepare().then(() => {
 
   // 🆕 মূল গেম লুপ
   setInterval(async () => {
-    if (!gameState) return; // যদি স্টেট তৈরি না হয়, তবে অপেক্ষা করা
+    if (!gameState) return;
 
     const now = Date.now();
 
@@ -463,6 +451,26 @@ app.prepare().then(() => {
       }
     }
   }, 50);
+
+  // 🆕 MongoDB Change Stream — ContactMessage পরিবর্তনে সকেট সিগন্যাল
+  try {
+    const contactChangeStream = mongoose.connection
+      .collection("contactmessages")
+      .watch([], { fullDocument: "updateLookup" });
+
+    contactChangeStream.on("change", (change) => {
+      console.log("📢 ContactMessage Changed:", change.operationType);
+      io.emit("contactTicketUpdated");
+    });
+
+    contactChangeStream.on("error", (err) => {
+      console.error("❌ Contact Change Stream Error:", err);
+    });
+
+    console.log("✅ Contact Change Stream Started");
+  } catch (err) {
+    console.error("❌ Change Stream Failed:", err.message);
+  }
 
   server.listen(port, (err) => {
     if (err) throw err;

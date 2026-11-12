@@ -1,21 +1,23 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSocket } from "@/app/SocketProvider";
 
 export default function ContactUs() {
   const router = useRouter();
+  const { socket } = useSocket();
   const [formData, setFormData] = useState({
     phone: "",
     title: "",
     message: "",
   });
   const [status, setStatus] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(""); // 🆕 এরর মেসেজ
+  const [errorMessage, setErrorMessage] = useState("");
   const [userRole, setUserRole] = useState("user");
   const [loading, setLoading] = useState(true);
   const [userTickets, setUserTickets] = useState([]);
 
-  // 🆕 ১. Auth চেক এবং ইউজারের রোল + টিকিট ফেচ
+  // 🆕 Auth চেক এবং ইউজারের রোল + টিকিট ফেচ
   useEffect(() => {
     const fetchUserAndTickets = async () => {
       try {
@@ -29,7 +31,6 @@ export default function ContactUs() {
 
         setUserRole(data.user.role || "user");
 
-        // 🆕 ইউজারের নিজের পাঠানো টিকিটগুলো ফেচ করুন
         const ticketRes = await fetch("/api/user/my-tickets", {
           credentials: "include",
         });
@@ -45,6 +46,30 @@ export default function ContactUs() {
     };
     fetchUserAndTickets();
   }, [router]);
+
+  // 🆕 সকেট সিগন্যাল — রিপ্লাই এলে টিকিট রিফ্রেশ
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdate = async () => {
+      console.log("📢 contactTicketUpdated — fetching tickets");
+      try {
+        const ticketRes = await fetch("/api/user/my-tickets", {
+          credentials: "include",
+        });
+        const ticketData = await ticketRes.json();
+        if (ticketData.success) setUserTickets(ticketData.tickets || []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    socket.on("contactTicketUpdated", handleUpdate);
+
+    return () => {
+      socket.off("contactTicketUpdated", handleUpdate);
+    };
+  }, [socket]);
 
   // 🆕 রোল অনুযায়ী শিরোনাম
   const getRoleDetails = () => {
@@ -75,7 +100,7 @@ export default function ContactUs() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus("sending");
-    setErrorMessage(""); // 🆕 এরর মেসেজ রিসেট
+    setErrorMessage("");
 
     try {
       const res = await fetch("/api/contact", {
@@ -88,7 +113,6 @@ export default function ContactUs() {
       if (data.success) {
         setStatus("success");
         setFormData({ phone: "", title: "", message: "" });
-        // 🆕 টিকিট পাঠানোর পর লিস্ট রিফ্রেশ করুন
         const ticketRes = await fetch("/api/user/my-tickets", {
           credentials: "include",
         });
@@ -241,7 +265,6 @@ export default function ContactUs() {
                     <p className="text-xs text-slate-400 mb-2">
                       {ticket.message}
                     </p>
-                    {/* 🆕 রিপ্লাই দেখানো */}
                     {ticket.replies?.length > 0 && (
                       <div className="space-y-2 border-t border-slate-800 pt-2 mt-2">
                         <p className="text-[10px] font-bold text-slate-500">

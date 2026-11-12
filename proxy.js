@@ -32,6 +32,11 @@ export function proxy(req) {
       "/admin",
       "/sub-admin",
       "/agent",
+      "/contact",
+      "/notice",
+      "/about",
+      "/terms",
+      "/privacy",
     ];
 
     const skipRateLimit = rateLimitExemptPaths.some(
@@ -91,6 +96,7 @@ export function proxy(req) {
       "/api/auth/reset-password",
       "/api/auth/logout",
       "/api/cron",
+
       // "/api/admin/seed",
     ];
     const isPublicApi = publicApiPaths.some((path) =>
@@ -100,7 +106,16 @@ export function proxy(req) {
     // ==========================================
     // ৩. Public Pages (login ছাড়াই access)
     // ==========================================
-    const publicPages = ["/login", "/register", "/reset-password"];
+    const publicPages = [
+      "/login",
+      "/register",
+      "/reset-password",
+      "/about", // 🆕
+      "/terms", // 🆕
+      "/privacy", // 🆕
+      "/notice", // 🆕
+      "/contact", // 🆕
+    ];
     const isPublicPage = publicPages.some(
       (path) => pathname === path || pathname.startsWith(path + "/"),
     );
@@ -121,6 +136,8 @@ export function proxy(req) {
       "/api",
       "/deposit",
       "/withdraw",
+      "/contact",
+      "/notice",
     ];
     const isProtectedRoute = protectedRoutes.some(
       (route) => pathname === route || pathname.startsWith(route + "/"),
@@ -200,11 +217,21 @@ export const config = {
     "/admin/:path*",
     "/sub-admin",
     "/sub-admin/:path*",
-    "/agent", // 🆕 এজেন্ট প্যানেল matcher
-    "/agent/:path*", // 🆕 এজেন্ট প্যানেল sub-routes
+    "/agent",
+    "/agent/:path*",
     "/deposit",
     "/deposit/:path*",
     "/withdraw",
     "/withdraw/:path*",
+    "/contact",
+    "/contact/:path*",
+    "/notice",
+    "/notice/:path*",
+    "/about",        // 🆕
+    "/about/:path*", // 🆕
+    "/terms",        // 🆕
+    "/terms/:path*", // 🆕
+    "/privacy",      // 🆕
+    "/privacy/:path*", // 🆕
   ],
 };

@@ -1,10 +1,11 @@
-
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSocket } from "@/app/SocketProvider";
 
 export default function ContactMessages() {
   const router = useRouter();
+  const { socket } = useSocket();
   const [isAuthorized, setIsAuthorized] = useState(null);
   const [messages, setMessages] = useState([]);
   const [filteredMessages, setFilteredMessages] = useState([]);
@@ -13,14 +14,12 @@ export default function ContactMessages() {
   const [messageToast, setMessageToast] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // 🆕 সার্চ ও ফিল্টার স্টেট
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
 
-  // 🆕 কাস্টম কনফার্ম মডাল স্টেট
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
-    type: null, // "close" অথবা "delete"
+    type: null,
     messageId: null,
   });
 
@@ -52,7 +51,9 @@ export default function ContactMessages() {
 
   const fetchMessages = async () => {
     try {
-      const res = await fetch("/api/admin/contact-messages");
+      const res = await fetch("/api/admin/contact-messages", {
+        credentials: "include",
+      });
       const data = await res.json();
       if (data.success) {
         setMessages(data.messages);
@@ -66,13 +67,23 @@ export default function ContactMessages() {
     }
   };
 
+  // 🆕 প্রথমবার লোড
   useEffect(() => {
     if (isAuthorized) {
       fetchMessages();
-      const interval = setInterval(fetchMessages, 30000);
-      return () => clearInterval(interval);
     }
   }, [isAuthorized]);
+
+  // 🆕 সকেট সিগন্যাল (শুধু সকেট, কোনো পোলিং নেই)
+  useEffect(() => {
+    if (!socket || !isAuthorized) return;
+    const handleUpdate = () => {
+      console.log("📢 contactTicketUpdated — fetching messages");
+      fetchMessages();
+    };
+    socket.on("contactTicketUpdated", handleUpdate);
+    return () => socket.off("contactTicketUpdated", handleUpdate);
+  }, [socket, isAuthorized]);
 
   // 🆕 সার্চ এবং ফিল্টার লজিক
   useEffect(() => {
@@ -101,6 +112,7 @@ export default function ContactMessages() {
       const res = await fetch("/api/admin/contact-messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ messageId }),
       });
       const data = await res.json();
@@ -128,6 +140,7 @@ export default function ContactMessages() {
       const res = await fetch("/api/admin/contact-messages/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ messageId, replyMessage: text }),
       });
       const data = await res.json();
@@ -145,12 +158,10 @@ export default function ContactMessages() {
     }
   };
 
-  // 🆕 মডাল ওপেন
   const openConfirmModal = (type, messageId) => {
     setConfirmModal({ isOpen: true, type, messageId });
   };
 
-  // 🆕 মডালে "হ্যাঁ" ক্লিক
   const handleConfirmAction = async () => {
     const { type, messageId } = confirmModal;
     setConfirmModal({ isOpen: false, type: null, messageId: null });
@@ -161,6 +172,7 @@ export default function ContactMessages() {
         const res = await fetch("/api/admin/contact-messages/close", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ messageId }),
         });
         const data = await res.json();
@@ -173,16 +185,14 @@ export default function ContactMessages() {
       } else if (type === "delete") {
         const res = await fetch(`/api/admin/contact-messages?id=${messageId}`, {
           method: "DELETE",
+          credentials: "include",
         });
         const data = await res.json();
         if (data.success) {
           setMessageToast({ type: "success", text: data.message });
           fetchMessages();
         } else {
-          setMessageToast({
-            type: "error",
-            text: data.message || "ডিলিট করতে সমস্যা হয়েছে",
-          });
+          setMessageToast({ type: "error", text: "ডিলিট করতে সমস্যা হয়েছে" });
         }
       }
       setTimeout(() => setMessageToast(null), 3000);
@@ -206,7 +216,6 @@ export default function ContactMessages() {
 
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-200 p-4 md:p-8 pb-24 relative">
-      {/* 🆕 কাস্টম মডাল */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
@@ -262,7 +271,6 @@ export default function ContactMessages() {
           </div>
         )}
 
-        {/* হেডার */}
         <div className="flex items-center justify-between mb-4 bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-xl">
           <h1 className="text-xl md:text-2xl font-black text-emerald-400 flex items-center gap-2">
             <i className="fa-solid fa-envelope"></i> কন্টাক্ট টিকিট
@@ -274,12 +282,14 @@ export default function ContactMessages() {
           </h1>
         </div>
 
-        {/* সার্চ বার */}
         <div className="mb-4 bg-slate-900 border border-slate-800 rounded-xl p-3">
           <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">
             <i className="fa-solid fa-magnifying-glass text-slate-500 text-sm"></i>
             <input
               type="text"
+              maxLength="11"
+              pattern="[0-9]*"
+              inputMode="numeric"
               placeholder="টাইটেল, ফোন নম্বর বা মেসেজ দিয়ে খুঁজুন..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -296,7 +306,6 @@ export default function ContactMessages() {
           </div>
         </div>
 
-        {/* ফিল্টার বাটন */}
         <div className="flex flex-wrap gap-2 mb-4">
           <button
             onClick={() => setActiveFilter("all")}
@@ -401,14 +410,6 @@ export default function ContactMessages() {
                             ? "ক্লোজড"
                             : "নতুন"}
                     </span>
-                    {/* 🆕 ডিলিট বাটনে কাস্টম মডাল */}
-                    {/* <button
-                      onClick={() => openConfirmModal("delete", msg._id)}
-                      className="text-rose-400 hover:text-rose-300 bg-rose-900/20 p-1.5 rounded border border-rose-500/20 transition"
-                      title="ডিলিট"
-                    >
-                      <i className="fa-solid fa-trash text-xs"></i>
-                    </button> */}
                   </div>
                 </div>
 
@@ -467,7 +468,6 @@ export default function ContactMessages() {
                             <i className="fa-solid fa-paper-plane mr-1"></i>{" "}
                             রিপ্লাই
                           </button>
-                          {/* 🆕 ক্লোজ বাটনে কাস্টম মডাল */}
                           <button
                             onClick={() => openConfirmModal("close", msg._id)}
                             className="bg-rose-900/30 hover:bg-rose-900/50 text-rose-400 font-bold px-3 py-1.5 rounded-lg text-xs border border-rose-500/30 transition"

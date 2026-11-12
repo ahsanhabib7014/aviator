@@ -2,9 +2,11 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSocket } from "@/app/SocketProvider"; // 🆕
 
 export default function ContactUs() {
   const router = useRouter();
+  const { socket } = useSocket(); // 🆕
   const [formData, setFormData] = useState({
     phone: "",
     title: "",
@@ -45,6 +47,30 @@ export default function ContactUs() {
     };
     fetchUserAndTickets();
   }, [router]);
+
+  // 🆕 সকেট সিগন্যাল — রিপ্লাই এলে টিকিট রিফ্রেশ
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdate = async () => {
+      console.log("📢 contactTicketUpdated — fetching tickets");
+      try {
+        const ticketRes = await fetch("/api/user/my-tickets", {
+          credentials: "include",
+        });
+        const ticketData = await ticketRes.json();
+        if (ticketData.success) setUserTickets(ticketData.tickets || []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    socket.on("contactTicketUpdated", handleUpdate);
+
+    return () => {
+      socket.off("contactTicketUpdated", handleUpdate);
+    };
+  }, [socket]);
 
   // 🆕 রোল অনুযায়ী শিরোনাম
   const getRoleDetails = () => {
