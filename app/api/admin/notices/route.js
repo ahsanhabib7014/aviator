@@ -72,7 +72,7 @@ export async function PUT(req) {
     const updated = await Notice.findByIdAndUpdate(
       id,
       { title, desc, type, isActive },
-      { new: true },
+      { returnDocument: "after" },
     );
     return NextResponse.json({ success: true, notice: updated });
   } catch (error) {

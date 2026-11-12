@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import clientPromise from "@/lib/mongodb";
@@ -140,7 +139,7 @@ export async function PATCH(request) {
     const updatedUser = await User.findOneAndUpdate(
       { uid: userId },
       { $set: updateData },
-      { new: true },
+      { returnDocument: "after" },
     ).select("-password -pin");
 
     // ৩. অডিট লগ তৈরি

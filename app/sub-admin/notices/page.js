@@ -11,7 +11,7 @@
 //     title: "",
 //     desc: "",
 //     type: "আপডেট",
-//     isNew: true,
+//     isreturnDocument: "after",
 //   });
 //   const [isEditing, setIsEditing] = useState(false);
 //   const [message, setMessage] = useState(null);
@@ -59,7 +59,7 @@
 //           title: "",
 //           desc: "",
 //           type: "আপডেট",
-//           isNew: true,
+//           isreturnDocument: "after",
 //         });
 //         setIsEditing(false);
 //         fetchNotices();
@@ -106,7 +106,7 @@
 
 //   // 🆕 এডিট ক্যানসেল
 //   const handleCancelEdit = () => {
-//     setFormData({ id: null, title: "", desc: "", type: "আপডেট", isNew: true });
+//     setFormData({ id: null, title: "", desc: "", type: "আপডেট", isreturnDocument: "after" });
 //     setIsEditing(false);
 //   };
 
@@ -333,7 +333,7 @@ export default function AdminNotices() {
     title: "",
     desc: "",
     type: "আপডেট",
-    isNew: true,
+    isreturnDocument: "after",
   });
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState(null);
@@ -422,7 +422,7 @@ export default function AdminNotices() {
           title: "",
           desc: "",
           type: "আপডেট",
-          isNew: true,
+          isreturnDocument: "after",
         });
         setIsEditing(false);
         fetchNotices();
@@ -469,7 +469,13 @@ export default function AdminNotices() {
 
   // 🆕 এডিট ক্যানসেল
   const handleCancelEdit = () => {
-    setFormData({ id: null, title: "", desc: "", type: "আপডেট", isNew: true });
+    setFormData({
+      id: null,
+      title: "",
+      desc: "",
+      type: "আপডেট",
+      isreturnDocument: "after",
+    });
     setIsEditing(false);
   };
 

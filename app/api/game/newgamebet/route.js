@@ -107,7 +107,7 @@
 //           monthlyTurnover: totalAmount,
 //         },
 //       },
-//       { new: true },
+//       { returnDocument: "after" },
 //     );
 
 //     if (!user) {
@@ -234,7 +234,7 @@ export async function POST(req) {
     // ==========================================
     // 🆕 চালাকি আটকানোর ভ্যালিডেশন
     // ==========================================
-    
+
     // ১. Odd এবং Even একসাথে নয়
     const hasOdd = bets.some((b) => b.type === "odd");
     const hasEven = bets.some((b) => b.type === "even");
@@ -292,7 +292,7 @@ export async function POST(req) {
         { status: 400 },
       );
     }
-      // ০ সহ ৩৭ ও ১ থেকে ৩৬ চেক (লিমিট ৩০)
+    // ০ সহ ৩৭ ও ১ থেকে ৩৬ চেক (লিমিট ৩০)
     const numberBets = bets.filter((b) => b.type === "number");
 
     // সর্বোচ্চ ৩০টি ঘরে বাজি ধরা যাবে
@@ -337,7 +337,7 @@ export async function POST(req) {
           monthlyTurnover: totalAmount,
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!user) {

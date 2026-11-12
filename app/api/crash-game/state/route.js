@@ -80,7 +80,7 @@
 //         await CrashRound.findOneAndUpdate(
 //           { periodNumber: state.roundId },
 //           { $setOnInsert: { status: "active", totalBets: 0, bets: [], createdAt: new Date() } },
-//           { upsert: true, new: true }
+//           { upsert: true, returnDocument: "after" }
 //         );
 //       } catch (dbErr) {}
 //     }
@@ -130,7 +130,7 @@
 //         await CrashRound.findOneAndUpdate(
 //           { periodNumber: state.roundId },
 //           { $setOnInsert: { status: "waiting", totalBets: 0, bets: [], createdAt: new Date() } },
-//           { upsert: true, new: true }
+//           { upsert: true, returnDocument: "after" }
 //         );
 //       } catch (dbErr) {}
 //     }
@@ -338,7 +338,7 @@ export async function GET(req) {
               createdAt: new Date(),
             },
           },
-          { upsert: true, new: true },
+          { upsert: true, returnDocument: "after" },
         );
       } catch (dbErr) {}
     } else if (state.status === "flying") {
@@ -406,7 +406,7 @@ export async function GET(req) {
               createdAt: new Date(),
             },
           },
-          { upsert: true, new: true },
+          { upsert: true, returnDocument: "after" },
         );
       } catch (dbErr) {}
     }

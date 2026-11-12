@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import dbConnect from "@/utils/db";
@@ -200,7 +199,7 @@ export async function PATCH(req) {
         const updatedAgent = await User.findByIdAndUpdate(
           request.agentId,
           { $inc: { agentMainBalance: request.amountBDT } },
-          { session, new: true },
+          { session, returnDocument: "after" },
         );
 
         if (!updatedAgent) throw new Error("এজেন্ট আপডেট করা যায়নি।");

@@ -161,7 +161,7 @@
 //               },
 //             },
 //           },
-//           { new: true },
+//           { returnDocument: "after" },
 //         );
 
 //         if (!updatedRound) {
@@ -174,7 +174,7 @@
 //         const updatedUser = await User.findOneAndUpdate(
 //           { _id: user._id, balance: { $gte: amount } },
 //           { $inc: { balance: -amount, turnover: -amount } },
-//           { new: true },
+//           { returnDocument: "after" },
 //         );
 //         if (!updatedUser) {
 //           await CrashRound.updateOne(
@@ -281,7 +281,7 @@
 //             balance: { $gte: 0 },
 //           },
 //           { $inc: { balance: winAmount } },
-//           { new: true },
+//           { returnDocument: "after" },
 //         );
 
 //         bet.cashedOutAt = finalMultiplier;

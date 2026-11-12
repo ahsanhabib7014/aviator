@@ -62,7 +62,7 @@
 //         agentMainBalance: { $gte: taka },
 //       },
 //       { $inc: { agentMainBalance: -taka } },
-//       { new: true },
+//       { returnDocument: "after" },
 //     );
 
 //     if (!agent) {
@@ -84,7 +84,7 @@
 //           monthlyTurnover: taka,
 //         },
 //       },
-//       { new: true },
+//       { returnDocument: "after" },
 //     );
 
 //     if (!targetUser) {
@@ -109,7 +109,7 @@
 //       const updatedAgent = await User.findOneAndUpdate(
 //         { _id: agent._id },
 //         { $inc: { agentCommissionBalance: commission } },
-//         { new: true },
+//         { returnDocument: "after" },
 //       );
 //       if (updatedAgent) {
 //         newCommissionBalance = updatedAgent.agentCommissionBalance;
@@ -242,7 +242,7 @@ export async function POST(req) {
         agentMainBalance: { $gte: taka },
       },
       { $inc: { agentMainBalance: -taka } },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!agent) {
@@ -265,7 +265,7 @@ export async function POST(req) {
           monthlyTurnover: taka,
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!targetUser) {
@@ -290,7 +290,7 @@ export async function POST(req) {
       const updatedAgent = await User.findOneAndUpdate(
         { _id: agent._id },
         { $inc: { agentCommissionBalance: commission } },
-        { new: true },
+        { returnDocument: "after" },
       );
       if (updatedAgent) {
         newCommissionBalance = updatedAgent.agentCommissionBalance;
