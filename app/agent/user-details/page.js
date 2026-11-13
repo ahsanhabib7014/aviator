@@ -48,7 +48,8 @@ function UserDetailsContent() {
       </div>
     );
 
-  const { user, deposits, withdraws, rouletteBets, bigSmallBets } = data;
+  const { user, deposits, withdraws, rouletteBets, bigSmallBets, aviatorBets } =
+    data;
 
   return (
     <div className="min-h-screen bg-slate-950 p-4 text-white">
@@ -295,11 +296,78 @@ function UserDetailsContent() {
                         ৳{Number(bet.betAmount).toFixed(2)}
                       </td>
                       <td className="p-3">
-                        <span
+                        {/* <span
                           className={`px-2 py-1 rounded text-[10px] font-bold ${bet.status === "win" ? "bg-emerald-900/50 text-emerald-400" : "bg-rose-900/50 text-rose-400"}`}
                         >
                           {bet.status === "win"
                             ? `WIN (৳${bet.payout})`
+                            : "LOSS"}
+                        </span> */}
+                        <span
+                          className={`px-2 py-1 rounded text-[10px] font-bold ${
+                            String(bet.status).toLowerCase().includes("win")
+                              ? "bg-emerald-900/50 text-emerald-400"
+                              : "bg-rose-900/50 text-rose-400"
+                          }`}
+                        >
+                          {String(bet.status).toLowerCase().includes("win")
+                            ? `WIN (৳${Number(bet.payout) > 0 ? bet.payout : bet.returnAmount || 0})` // 👈 এখানে returnAmount যোগ করলাম
+                            : "LOSS"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {/* 🆕 Aviator (Crash) বেটিং হিস্ট্রি */}
+        <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+          <div className="p-4 border-b border-slate-800">
+            <h2 className="font-bold text-amber-400 text-sm">
+              Aviator গেমিং হিস্ট্রি
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-950 text-slate-400 text-xs uppercase">
+                <tr>
+                  <th className="p-3">পিরিয়ড</th>
+                  <th className="p-3">রেজাল্ট (মাল্টিপ্লায়ার)</th>
+                  <th className="p-3">স্লট</th>
+                  <th className="p-3">বাজি</th>
+                  <th className="p-3">স্ট্যাটাস</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!aviatorBets || aviatorBets.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="p-3 text-center text-slate-500">
+                      কোনো গেমের হিস্ট্রি নেই
+                    </td>
+                  </tr>
+                ) : (
+                  aviatorBets.map((bet, i) => (
+                    <tr key={i} className="border-b border-slate-800/50">
+                      <td className="p-3 font-mono text-slate-300 text-xs">
+                        {bet.periodNumber}
+                      </td>
+                      <td className="p-3 font-bold text-amber-400">
+                        {bet.winningNumber}x
+                      </td>
+                      <td className="p-3 text-slate-300 text-xs">
+                        {bet.userChoice}
+                      </td>
+                      <td className="p-3 font-bold">
+                        ৳{Number(bet.betAmount).toFixed(2)}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-1 rounded text-[10px] font-bold ${bet.status === "win" ? "bg-emerald-900/50 text-emerald-400" : "bg-rose-900/50 text-rose-400"}`}
+                        >
+                          {bet.status === "win"
+                            ? `WIN (৳${Number(bet.payout).toFixed(2)})`
                             : "LOSS"}
                         </span>
                       </td>
