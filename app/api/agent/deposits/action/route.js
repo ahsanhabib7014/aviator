@@ -153,7 +153,7 @@ export async function PATCH(req) {
           { _id: agentId, agentMainBalance: { $gte: depositAmount } },
           {
             $inc: {
-              agentMainBalance: -depositAmount,
+              agentMainBalance: depositAmount,
               agentCommissionBalance: commissionToAdd,
             },
           },
@@ -195,7 +195,7 @@ export async function PATCH(req) {
         }
 
         agentUpdateInfo = {
-          deductedFromMain: depositAmount,
+          addedToMain: depositAmount,
           commissionAdded: commissionToAdd,
         };
       } else {
@@ -229,7 +229,7 @@ export async function PATCH(req) {
           UserBalance: newUserBalance, // 👈 বড় হাতের অক্ষরে সেভ
           AgentBalance: newAgentBalance, // 👈 বড় হাতের অক্ষরে সেভ
         },
-        details: `এজেন্ট (${auth.user.phone || auth.user.uid}) কর্তৃক ৳${depositAmount} টাকার ডিপোজিট ${status === "approved" ? "অ্যাপ্রুভ" : "বাতিল"} করা হয়েছে।`,
+        details: `এজেন্ট (${auth.user.phone || auth.user.uid}) কর্তৃক ৳${depositAmount} টাকার ডিপোজিট ${status === "approved" ? "অ্যাপ্রুভ (এজেন্টের ব্যালেন্সে যোগ হয়েছে)" : "বাতিল"} করা হয়েছে।`,
         ipAddress: req.headers.get("x-forwarded-for") || "127.0.0.1",
       });
     } catch (auditErr) {

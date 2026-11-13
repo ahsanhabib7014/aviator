@@ -328,7 +328,7 @@ export async function PATCH(request) {
               },
               {
                 $inc: {
-                  agentMainBalance: -depositAmount,
+                  agentMainBalance: depositAmount,
                   agentCommissionBalance: commissionToAdd,
                 },
               },
@@ -372,7 +372,7 @@ export async function PATCH(request) {
             agentUpdateInfo = {
               agentId: updatedAgent._id,
               agentUid: updatedAgent.uid,
-              deductedFromMain: depositAmount,
+              addedToMain: depositAmount,
               commissionAdded: commissionToAdd,
             };
           }
@@ -395,7 +395,7 @@ export async function PATCH(request) {
     if (adminUser) {
       const ip = request.headers.get("x-forwarded-for") || "127.0.0.1";
       const agentDetail = agentUpdateInfo
-        ? ` | এজেন্ট ${agentUpdateInfo.agentUid}: ব্যালেন্স থেকে ৳${agentUpdateInfo.deductedFromMain} কাটা, কমিশন ৳${agentUpdateInfo.commissionAdded} যোগ।`
+        ? ` | এজেন্ট ${agentUpdateInfo.agentUid}: ব্যালেন্সে ৳${agentUpdateInfo.addedToMain} যোগ হয়েছে, কমিশন ৳${agentUpdateInfo.commissionAdded} যোগ।`
         : "";
 
       await AuditLog.create({
